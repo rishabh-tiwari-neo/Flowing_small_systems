@@ -3,7 +3,7 @@ Hello! Welcome to the code repository made for studying the long-range correlati
 The codebase is structured in the following way:
 
 main/
-├── run.sh                 # This shell script is tasked to run the event generation, post-processing, and plotting programs 
+├── run.sh                 # This shell script is tasked with running the event generation, post-processing, and plotting programs 
 ├── plots/                 # The finalised plots are stored here
 ├── data/                  # The necessary root files for the study 
 ├── generation/
