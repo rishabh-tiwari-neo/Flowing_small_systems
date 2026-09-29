@@ -1,0 +1,34 @@
+=== Run Summary ===
+Date: Tue Sep 29 02:39:31 AM IST 2026
+Total events requested: 10000
+Cores used: 4
+Total wall-clock runtime: 15s
+
+--- Seeds used ---
+Seeds for this run (Tue Sep 29 02:39:15 AM IST 2026):
+task 0 -> seed 138393863
+task 1 -> seed 574737741
+task 2 -> seed 304542143
+task 3 -> seed 83501602
+
+--- Per-task details ---
+[task 0]
+[task 0] started Tue Sep 29 02:39:15 AM IST 2026, seed=138393863, events=2500
+[seed 138393863] Done. Wrote data/output_task0.root (events=2500, ntrig[TPC-FMD12]=38646, ntrig[TPC-FMD3]=38646, ntrig[FMD12-FMD3]=76478)
+[task 0] finished Tue Sep 29 02:39:29 AM IST 2026, runtime=14s
+
+[task 1]
+[task 1] started Tue Sep 29 02:39:15 AM IST 2026, seed=574737741, events=2500
+[seed 574737741] Done. Wrote data/output_task1.root (events=2500, ntrig[TPC-FMD12]=38991, ntrig[TPC-FMD3]=38991, ntrig[FMD12-FMD3]=77081)
+[task 1] finished Tue Sep 29 02:39:29 AM IST 2026, runtime=14s
+
+[task 2]
+[task 2] started Tue Sep 29 02:39:15 AM IST 2026, seed=304542143, events=2500
+[seed 304542143] Done. Wrote data/output_task2.root (events=2500, ntrig[TPC-FMD12]=38587, ntrig[TPC-FMD3]=38587, ntrig[FMD12-FMD3]=77154)
+[task 2] finished Tue Sep 29 02:39:29 AM IST 2026, runtime=14s
+
+[task 3]
+[task 3] started Tue Sep 29 02:39:15 AM IST 2026, seed=83501602, events=2500
+[seed 83501602] Done. Wrote data/output_task3.root (events=2500, ntrig[TPC-FMD12]=39345, ntrig[TPC-FMD3]=39345, ntrig[FMD12-FMD3]=77333)
+[task 3] finished Tue Sep 29 02:39:29 AM IST 2026, runtime=14s
+
