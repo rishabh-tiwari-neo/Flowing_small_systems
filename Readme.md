@@ -1,6 +1,6 @@
 Hello! Welcome to the code repository made for studying the long-range correlations and flow signatures in small systems.
 
-The codebase is structured in the following way:
+The codebase is structured in the following ways:
 
 main/
 ├── run.sh                 # This shell script is tasked with running the event generation, post-processing, and plotting programs 
