@@ -1,0 +1,41 @@
+=== Run Summary ===
+Date: Sat Oct  3 11:53:56 PM IST 2026
+Binary: generator/stat_check
+Total events requested: 10000
+Cores used: 5
+Total wall-clock runtime: 17s
+
+--- Seeds used ---
+Seeds for this run (Sat Oct  3 11:53:38 PM IST 2026):
+task 0 -> seed 388696417
+task 1 -> seed 331565664
+task 2 -> seed 119417774
+task 3 -> seed 397160196
+task 4 -> seed 714503332
+
+--- Per-task details ---
+[task 0]
+[task 0] started Sat Oct  3 11:53:38 PM IST 2026, seed=388696417, events=2000
+[seed 388696417] Done. Wrote data/test_run/output_task0.root (events=2000)
+[task 0] finished Sat Oct  3 11:53:55 PM IST 2026, runtime=17s
+
+[task 1]
+[task 1] started Sat Oct  3 11:53:38 PM IST 2026, seed=331565664, events=2000
+[seed 331565664] Done. Wrote data/test_run/output_task1.root (events=2000)
+[task 1] finished Sat Oct  3 11:53:52 PM IST 2026, runtime=14s
+
+[task 2]
+[task 2] started Sat Oct  3 11:53:38 PM IST 2026, seed=119417774, events=2000
+[seed 119417774] Done. Wrote data/test_run/output_task2.root (events=2000)
+[task 2] finished Sat Oct  3 11:53:52 PM IST 2026, runtime=14s
+
+[task 3]
+[task 3] started Sat Oct  3 11:53:38 PM IST 2026, seed=397160196, events=2000
+[seed 397160196] Done. Wrote data/test_run/output_task3.root (events=2000)
+[task 3] finished Sat Oct  3 11:53:55 PM IST 2026, runtime=17s
+
+[task 4]
+[task 4] started Sat Oct  3 11:53:38 PM IST 2026, seed=714503332, events=2000
+[seed 714503332] Done. Wrote data/test_run/output_task4.root (events=2000)
+[task 4] finished Sat Oct  3 11:53:52 PM IST 2026, runtime=14s
+
