@@ -95,34 +95,30 @@ int main(int argc, char* argv[]) {
     tree->Branch("pid",    &pid);
     tree->Branch("charge", &charge);
 
-    // ---- histograms ----------------------------------------------------
-    // nchCent in bins of 10: [0,10), [10,20), ... [90,100)
-    TH1D* hNch10 = new TH1D("hNch10",
-        "N_{ch} (|#eta|<0.8, 0.2<p_{T}<3.0);N_{ch};events", 10, 0, 100);
-    hNch10->Sumw2();
+    // ---- histograms: one bin per integer value (bin k is centred on k) ----
+    auto mk = [](const char* name, const char* title, int nmax) {
+        TH1D* h = new TH1D(name, title, nmax + 1, -0.5, nmax + 0.5);
+        h->Sumw2();
+        return h;
+    };
+    TH1D* hNchCent  = mk("hNchCent",  "N_{ch} (|#eta|<0.8, 0.2<p_{T}<3.0);N_{ch};events", 150);
+    TH1D* hNchV0A   = mk("hNchV0A",   "N_{ch} in V0A (2.8<#eta<5.1);N_{ch};events", 200);
+    TH1D* hNchV0C   = mk("hNchV0C",   "N_{ch} in V0C (-3.7<#eta<-1.7);N_{ch};events", 200);
+    TH1D* hNchV0M   = mk("hNchV0M",   "N_{ch} V0A+V0C;N_{ch};events", 400);
+    TH1D* hNchFMD12 = mk("hNchFMD12", "N_{ch} in FMD1,2 (1.7<#eta<5.1);N_{ch};events", 300);
+    TH1D* hNchFMD3  = mk("hNchFMD3",  "N_{ch} in FMD3 (-3.1<#eta<-1.7);N_{ch};events", 200);
+    TH1D* hNmpi     = mk("hNmpi",     "N_{MPI};N_{MPI};events", 60);
 
-    // forward-detector charged multiplicities, same bins of 10: [0,10) ... [90,100)
-    TH1D* hNchV0A = new TH1D("hNchV0A",
-        "N_{ch} in V0A (2.8<#eta<5.1);N_{ch};events", 10, 0, 100);
-    TH1D* hNchV0C = new TH1D("hNchV0C",
-        "N_{ch} in V0C (-3.7<#eta<-1.7);N_{ch};events", 10, 0, 100);
-    TH1D* hNchFMD12 = new TH1D("hNchFMD12",
-        "N_{ch} in FMD1,2 (1.7<#eta<5.1);N_{ch};events", 10, 0, 100);
-    TH1D* hNchFMD3 = new TH1D("hNchFMD3",
-        "N_{ch} in FMD3 (-3.1<#eta<-1.7);N_{ch};events", 10, 0, 100);
-    hNchV0A->Sumw2(); hNchV0C->Sumw2();
-    hNchFMD12->Sumw2(); hNchFMD3->Sumw2();
-
-    // nMPI variable bins: [0,3), [3,7), [7,11), [11,15), [15,19), [19,23), [23,34)
-    const double mpiEdges[] = {0, 3, 7, 11, 15, 19, 23, 34};
-    TH1D* hNmpi = new TH1D("hNmpi",
-        "N_{MPI};N_{MPI};events", 7, mpiEdges);
-    hNmpi->Sumw2();
+    // event counter: bin 1 = generated, bin 2 = registered (V0A>0 && V0C>0)
+    TH1D* hCounter = new TH1D("hCounter", "event counter;;events", 2, 0.5, 2.5);
+    hCounter->GetXaxis()->SetBinLabel(1, "generated");
+    hCounter->GetXaxis()->SetBinLabel(2, "registered (V0A&&V0C)");
 
     // ---- event loop ---------------------------------------------------
     for (long li = 0; li < n_events; ++li) {
 
         if (!pythia.next()) continue;
+        hCounter->Fill(1);
 
         pt.clear(); eta.clear(); phi.clear(); rap.clear();
         pid.clear(); charge.clear();
@@ -175,12 +171,24 @@ int main(int argc, char* argv[]) {
             charge.push_back((short)q);
         }
 
+        // MB trigger: only events with a hit in both V0A and V0C are registered
+        if (!(nchV0A > 0 && nchV0C > 0)) {
+            if (li % 100 == 0 || li == n_events - 1) {
+                std::ofstream pf(progFile);
+                pf << (li + 1);
+                pf.close();
+            }
+            continue;
+        }
+        hCounter->Fill(2);
+
         nMPI  = pythia.info.nMPI();
         evtNo = li;
 
-        hNch10->Fill(nchCent);
+        hNchCent->Fill(nchCent);
         hNchV0A->Fill(nchV0A);
         hNchV0C->Fill(nchV0C);
+        hNchV0M->Fill(nchV0A + nchV0C);
         hNchFMD12->Fill(nchFMD12);
         hNchFMD3->Fill(nchFMD3);
         hNmpi->Fill(nMPI);
@@ -197,12 +205,14 @@ int main(int argc, char* argv[]) {
     // ---- write --------------------------------------------------------
     fout->cd();
     tree->Write();
-    hNch10->Write();
+    hNchCent->Write();
     hNchV0A->Write();
     hNchV0C->Write();
+    hNchV0M->Write();
     hNchFMD12->Write();
     hNchFMD3->Write();
     hNmpi->Write();
+    hCounter->Write();
     fout->Close();
 
     std::cout << "[seed " << seed << "] Done. Wrote " << outFile
