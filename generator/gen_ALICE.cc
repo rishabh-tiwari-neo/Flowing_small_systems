@@ -21,11 +21,17 @@ static const double NCH_PT_MIN  = 0.2, NCH_PT_MAX = 3.0;
 // ---- V0 trigger / V0M estimator ------------------------------------
 static const double V0A_ETA_MIN = 2.8,  V0A_ETA_MAX = 5.1;
 static const double V0C_ETA_MIN = -3.7, V0C_ETA_MAX = -1.7;
-static const int    V0M_HM_MIN  = 157;   // HM: (nchV0A + nchV0C) > 157 (~top 0.07% in the proxy)
 
-// ---- class definitions (as in the paper) ---------------------------
-static const int NCH_HM_MIN = 25;        // HM: V0M cut && nchCent > 25
-static const int NCH_LM_MAX = 20;        // LM: V0 coincidence && nchCent < 20
+// ---- class definitions ---------------------------------------------
+// HM   : strict top ~0.07% of V0M (as in the paper's trigger), plus nchCent > 25
+// LM   : V0 coincidence && nchCent < 20
+// HM35 : looser V0M cut + nchCent > 25, chosen so <nchCent> ~ 35 as in the paper
+//        (from the 1M-event scan: V0M >= 46 with nchCent > 25 gives <nchCent> ~ 35, ~13% of events)
+// The classes are NOT exclusive: every HM event is also an HM35 event.
+static const int V0M_HM_MIN   = 157;   // HM:   (nchV0A + nchV0C) > 157
+static const int V0M_HM35_MIN = 45;    // HM35: (nchV0A + nchV0C) > 45
+static const int NCH_HM_MIN   = 25;    // HM and HM35: nchCent > 25
+static const int NCH_LM_MAX   = 20;    // LM: nchCent < 20
 
 // ---- identified-particle acceptance --------------------------------
 static const double PID_ETA_MAX = 0.8;   // pi, K, p: |eta| < 0.8
@@ -42,15 +48,18 @@ inline int ptBin(double pt) {
 }
 
 // ---- event classes (integer tags, used as array indices) -------------
-// NCLS = number of classes; NONE = neither HM nor LM (event is skipped)
-enum EvClass { HM = 0, LM = 1, NCLS = 2, NONE = -1 };
-static const char* CLS_NAME[NCLS] = {"HM", "LM"};
+// NCLS = number of classes
+enum EvClass { HM = 0, LM = 1, HM35 = 2, NCLS = 3 };
+static const char* CLS_NAME[NCLS] = {"HM", "LM", "HM35"};
 
-inline int classify(int nchV0A, int nchV0C, int nchCent) {
-    if (!(nchV0A > 0 && nchV0C > 0)) return NONE;               // MB trigger
-    if ((nchV0A + nchV0C) > V0M_HM_MIN && nchCent > NCH_HM_MIN) return HM;
-    if (nchCent < NCH_LM_MAX) return LM;
-    return NONE;
+// membership of one event in each class (an event can be in several)
+inline void classify(int nchV0A, int nchV0C, int nchCent, bool in[NCLS]) {
+    for (int c = 0; c < NCLS; ++c) in[c] = false;
+    if (!(nchV0A > 0 && nchV0C > 0)) return;                    // MB trigger
+    const int v0m = nchV0A + nchV0C;
+    in[HM]   = (v0m > V0M_HM_MIN   && nchCent > NCH_HM_MIN);
+    in[HM35] = (v0m > V0M_HM35_MIN && nchCent > NCH_HM_MIN);
+    in[LM]   = (nchCent < NCH_LM_MAX);
 }
 
 // ---- species (identified triggers) ---------------------------------
@@ -144,12 +153,13 @@ int main(int argc, char* argv[]) {
     TH1D* hNtrigFF[NCLS];         // FMD12 particles (trigger arm of FMD12-FMD3), 1 bin
     TH1D* hNassoc[NCLS][2];       // associated particles in FMD12 / FMD3, 1 bin
     TH1D* hEvents[NCLS];          // events per class, 1 bin
+    TH1D* hNchClass[NCLS];        // nchCent distribution per class (gives <nchCent> of HM, LM, HM35)
     TH1D* hCounter = new TH1D("hCounter", "event counter;;events", 3, 0.5, 3.5);
     hCounter->GetXaxis()->SetBinLabel(1, "generated");
     hCounter->GetXaxis()->SetBinLabel(2, "registered (V0A&&V0C)");
-    hCounter->GetXaxis()->SetBinLabel(3, "HM or LM");
+    hCounter->GetXaxis()->SetBinLabel(3, "HM or LM or HM35");
 
-    // inclusive multiplicity distributions (all registered events), for monitoring the HM/LM cuts
+    // inclusive multiplicity distributions (all registered events), for monitoring the cuts
     TH1D* hNchCent = new TH1D("hNchCent", "N_{ch} (|#eta|<0.8, 0.2<p_{T}<3.0);N_{ch};events",
                               301, -0.5, 300.5);
     TH1D* hNchV0M  = new TH1D("hNchV0M", "N_{ch} V0A+V0C;N_{ch};events", 401, -0.5, 400.5);
@@ -179,10 +189,14 @@ int main(int argc, char* argv[]) {
         hNassoc[c][0] = new TH1D(Form("hNassoc_%s_FMD12", CLS_NAME[c]), "N_{assoc} FMD12", 1, 0, 1);
         hNassoc[c][1] = new TH1D(Form("hNassoc_%s_FMD3",  CLS_NAME[c]), "N_{assoc} FMD3",  1, 0, 1);
         hEvents[c]    = new TH1D(Form("hEvents_%s", CLS_NAME[c]), "events", 1, 0, 1);
+        hNchClass[c]  = new TH1D(Form("hNchCent_%s", CLS_NAME[c]),
+                                 Form("N_{ch} (|#eta|<0.8, 0.2<p_{T}<3.0), %s;N_{ch};events", CLS_NAME[c]),
+                                 301, -0.5, 300.5);
         hNtrigFF[c]->Sumw2();
         hNassoc[c][0]->Sumw2();
         hNassoc[c][1]->Sumw2();
         hEvents[c]->Sumw2();
+        hNchClass[c]->Sumw2();
     }
 
     // ---- event loop ---------------------------------------------------
@@ -231,10 +245,15 @@ int main(int argc, char* argv[]) {
             hNchV0M->Fill(nchV0A + nchV0C);
         }
 
-        const int c = classify(nchV0A, nchV0C, nchCent);
-        if (c != NONE) {
-            hCounter->Fill(3);
+        bool in[NCLS];
+        classify(nchV0A, nchV0C, nchCent, in);
+        if (in[HM] || in[LM] || in[HM35]) hCounter->Fill(3);
+
+        for (int c = 0; c < NCLS; ++c) {
+            if (!in[c]) continue;
+
             hEvents[c]->Fill(0.5);
+            hNchClass[c]->Fill(nchCent);
             hNtrigFF[c]->Fill(0.5, (double)f12.size());
             hNassoc[c][0]->Fill(0.5, (double)f12.size());
             hNassoc[c][1]->Fill(0.5, (double)f3.size());
@@ -282,6 +301,7 @@ int main(int argc, char* argv[]) {
         hNassoc[c][0]->Write();
         hNassoc[c][1]->Write();
         hEvents[c]->Write();
+        hNchClass[c]->Write();
     }
     hCounter->Write();
     hNchCent->Write();
@@ -291,7 +311,8 @@ int main(int argc, char* argv[]) {
     std::cout << "[seed " << seed << "] Done. Wrote " << outFile
               << " (events=" << n_events
               << ", HM=" << hEvents[HM]->GetEntries()
-              << ", LM=" << hEvents[LM]->GetEntries() << ")" << std::endl;
+              << ", LM=" << hEvents[LM]->GetEntries()
+              << ", HM35=" << hEvents[HM35]->GetEntries() << ")" << std::endl;
 
     return 0;
 }
