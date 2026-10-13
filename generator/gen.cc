@@ -8,55 +8,6 @@
 #include "TH2D.h"
 #include "TH1D.h"
 
-// =====================================================================
-// GENERATION + SAME-EVENT PAIRING, three-subevent method, two
-// independent event-activity classifications (Nch, Nmpi), all in
-// memory, single process per task.
-//
-// Eta windows (trigger/associated arms) follow the ALICE identified-
-// hadron paper's three-subevent method:
-//   TPC   : |eta| < 0.8            (trigger arm)
-//   FMD12 : 1.7 < eta < 5.1        (associated arm, forward)
-//   FMD3  : -3.1 < eta < -1.7      (associated arm, backward)
-//
-// Three pairings are built per event:
-//   pairing 0: TPC   - FMD12   (deta = eta_FMD12 - eta_TPC,   ~[0.9,5.9])
-//   pairing 1: TPC   - FMD3    (deta = eta_TPC   - eta_FMD3,  ~[0.9,3.9])
-//   pairing 2: FMD12 - FMD3    (deta = eta_FMD12 - eta_FMD3,  ~[3.4,8.2])
-// deta is defined so it is always positive for the natural pairing
-// direction; axis ranges below are booked with a small margin.
-//
-// Event classification follows Ortiz, Sahu & Bencedi (arXiv:2512.09195):
-// each event is classified TWICE, independently, by
-//   - Nch  : charged particles, |eta| < 0.8, 0.2 < pT < 3.0 GeV/c
-//   - Nmpi : MC-truth number of multiparton interactions
-// into 6 classes each (I-VI, low -> high activity) -> 12 class-slots
-// total. The same event fills BOTH its Nch-class histograms and its
-// Nmpi-class histograms (these are two separate, parallel binnings of
-// the same event sample, not a 6x6 cross product).
-//
-// *** CLASS EDGES BELOW ARE PLACEHOLDERS ***
-// Ortiz et al. define classes so each one holds the same FRACTION of
-// events (percentile binning), which requires knowing the inclusive
-// Nch/Nmpi distributions beforehand. This generator fills hNchIncl and
-// hNmpiIncl for exactly that purpose: run a short calibration pass,
-// derive equal-fraction edges from those two histograms, then update
-// kNchEdges/kNmpiEdges below before a full production run.
-//
-// No mixed-event background is built here: at generator (truth) level
-// there is no detector acceptance to correct for. Non-flow subtraction
-// (template fit against the lowest-activity class) is done offline in
-// post-processing.
-//
-// No particle identification yet -- all final charged particles are
-// treated identically (extension point for later: tag pid per particle
-// and split histograms by species, as in the ALICE paper's pi/K/p/K0S/
-// Lambda breakdown).
-//
-// argv[1] = n_events
-// argv[2] = seed
-// argv[3] = output_file
-// =====================================================================
 
 // ---- acceptance windows -------------------------------------------
 static const double TPC_ETA_MAX    = 0.8;
