@@ -37,10 +37,11 @@ static const int NCH_LM_MAX   = 20;    // LM: nchCent < 20
 static const double PID_ETA_MAX = 0.8;   // pi, K, p: |eta| < 0.8
 static const double V0_Y_MAX    = 0.5;   // K0S, Lambda: |y| < 0.5
 
-// ---- common pT binning for all species -----------------------------
-static const int    NPT = 11;
-static const double PT_EDGES[NPT + 1] = {0.5, 0.6, 0.8, 1.0, 1.25, 1.5,
-                                         1.75, 2.0, 3.0, 4.0, 5.0, 10.0};
+// ---- common pT binning for all species (15 bins) -------------------
+// NOTE: the bin numbers (pt0..pt14) differ from the old 11-bin version above 2 GeV/c.
+static const int    NPT = 16;
+static const double PT_EDGES[NPT + 1] = {0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0,
+                                         2.25, 2.5, 2.75, 3.0,3.25, 3.5, 4.0, 5.0, 10.0};
 
 inline int ptBin(double pt) {
     if (pt < PT_EDGES[0] || pt >= PT_EDGES[NPT]) return -1;

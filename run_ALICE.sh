@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hardcoded run configuration
-TOTAL=10000
+TOTAL=100000
 NCORES=4
 
 GEN_BIN="generator/gen_ALICE"
