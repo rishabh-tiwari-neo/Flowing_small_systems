@@ -10,8 +10,7 @@
 #include "TH1D.h"
 #include "TString.h"
 
-// ---- acceptance windows -------------------------------------------
-// symmetric windows are used as fabs(eta) < X, so one constant covers both edges
+// ---- acceptance windows -----
 static const double FMD12_ETA_MIN = 1.7,  FMD12_ETA_MAX = 5.1;
 static const double FMD3_ETA_MIN  = -3.1, FMD3_ETA_MAX  = -1.7;
 
@@ -22,51 +21,54 @@ static const double NCH_PT_MIN  = 0.2, NCH_PT_MAX = 3.0;
 static const double V0A_ETA_MIN = 2.8,  V0A_ETA_MAX = 5.1;
 static const double V0C_ETA_MIN = -3.7, V0C_ETA_MAX = -1.7;
 
-// ---- class definitions ---------------------------------------------
-// HM   : strict top ~0.07% of V0M (as in the paper's trigger), plus nchCent > 25
-// LM   : V0 coincidence && nchCent < 20
+// ---- class definitions ----
+// HM   : Top ~0.07% of V0M (as in the paper's trigger), plus nchCent > 25
+// LM   : V0 coincidence and nchCent < 20
 // HM35 : looser V0M cut + nchCent > 25, chosen so <nchCent> ~ 35 as in the paper
-//        (from the 1M-event scan: V0M >= 46 with nchCent > 25 gives <nchCent> ~ 35, ~13% of events)
-// The classes are NOT exclusive: every HM event is also an HM35 event.
+//        (from a 1M-event run: V0M >= 46 with nchCent > 25 gives <nchCent> ~ 35, ~ top 13% of events)
+
 static const int V0M_HM_MIN   = 157;   // HM:   (nchV0A + nchV0C) > 157
 static const int V0M_HM35_MIN = 45;    // HM35: (nchV0A + nchV0C) > 45
 static const int NCH_HM_MIN   = 25;    // HM and HM35: nchCent > 25
-static const int NCH_LM_MAX   = 20;    // LM: nchCent < 20
+static const int NCH_LM_MAX   = 20;    // LM: nchCent < 20 
 
-// ---- identified-particle acceptance --------------------------------
+
+// ---- identified-particle acceptance ----
 static const double PID_ETA_MAX = 0.8;   // pi, K, p: |eta| < 0.8
 static const double V0_Y_MAX    = 0.5;   // K0S, Lambda: |y| < 0.5
 
-// ---- common pT binning for all species (15 bins) -------------------
-// NOTE: the bin numbers (pt0..pt14) differ from the old 11-bin version above 2 GeV/c.
-static const int    NPT = 16;
-static const double PT_EDGES[NPT + 1] = {0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0,
+// ---- common pT binning for all species ----
+static const int    NpT_bins = 16;
+static const double PT_EDGES[NpT_bins + 1] = {0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0,
                                          2.25, 2.5, 2.75, 3.0,3.25, 3.5, 4.0, 5.0, 10.0};
 
+// Cataloging the pT bin of a particle
 inline int ptBin(double pt) {
-    if (pt < PT_EDGES[0] || pt >= PT_EDGES[NPT]) return -1;
-    return int(std::upper_bound(PT_EDGES, PT_EDGES + NPT + 1, pt) - PT_EDGES) - 1;
+    if (pt < PT_EDGES[0] || pt >= PT_EDGES[NpT_bins]) return -1;
+    return int(std::upper_bound(PT_EDGES, PT_EDGES + NpT_bins + 1, pt) - PT_EDGES) - 1;
 }
 
-// ---- event classes (integer tags, used as array indices) -------------
-// NCLS = number of classes
-enum EvClass { HM = 0, LM = 1, HM35 = 2, NCLS = 3 };
+//Event classifier block (EC)
+// ---- event classes  ----
+enum EvClass { HM = 0, LM = 1, HM35 = 2, NCLS = 3 };// NCLS = number of classes
 static const char* CLS_NAME[NCLS] = {"HM", "LM", "HM35"};
 
 // membership of one event in each class (an event can be in several)
-inline void classify(int nchV0A, int nchV0C, int nchCent, bool in[NCLS]) {
-    for (int c = 0; c < NCLS; ++c) in[c] = false;
+inline void classify(int nchV0A, int nchV0C, int nchCent, bool Ecl[NCLS]) {
+    for (int c = 0; c < NCLS; ++c) Ecl[c] = false;
     if (!(nchV0A > 0 && nchV0C > 0)) return;                    // MB trigger
     const int v0m = nchV0A + nchV0C;
-    in[HM]   = (v0m > V0M_HM_MIN   && nchCent > NCH_HM_MIN);
-    in[HM35] = (v0m > V0M_HM35_MIN && nchCent > NCH_HM_MIN);
-    in[LM]   = (nchCent < NCH_LM_MAX);
+    Ecl[HM]   = (v0m > V0M_HM_MIN   && nchCent > NCH_HM_MIN);
+    Ecl[HM35] = (v0m > V0M_HM35_MIN && nchCent > NCH_HM_MIN);
+    Ecl[LM]   = (nchCent < NCH_LM_MAX);
 }
+//end EC
 
-// ---- species (identified triggers) ---------------------------------
+// ---- identified species ----
 enum Species { PI = 0, K, P, K0S, LAM, NSP };
 static const char* SP_NAME[NSP] = {"pi", "K", "p", "K0S", "Lam"};
 
+//function block to indentify particles
 inline int speciesOf(int absId) {
     switch (absId) {
         case 211:  return PI;
@@ -78,16 +80,16 @@ inline int speciesOf(int absId) {
     }
 }
 
-// ---- pairings (integer tags, used as array indices) --------------------
-// TPC_FMD12  : identified trigger (|eta|<0.8) with a charged particle in FMD1,2
-// TPC_FMD3   : identified trigger (|eta|<0.8) with a charged particle in FMD3
+// ---- pairings ----
+// TPC_FMD12  : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 for k0s and Lambda) with a charged particle in FMD1,2
+// TPC_FMD3   : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 for k0s and Lambda) with a charged particle in FMD3
 // FMD12_FMD3 : charged particle in FMD1,2 with one in FMD3 (no PID, no pT bins)
 // only the first two are used for the identified-particle histograms (NIDPAIR)
 enum Pairing { TPC_FMD12 = 0, TPC_FMD3 = 1, FMD12_FMD3 = 2, NPAIR = 3 };
 static const int NIDPAIR = 2;
 static const char* PAIR_NAME[NPAIR] = {"TPC_FMD12", "TPC_FMD3", "FMD12_FMD3"};
 
-// |deta| window, as in the paper (pp). Pairs outside it are discarded.
+// |deta| window, as in the paper. Pairs outside it are discarded.
 static const double DETA_MIN = 1.1;
 static const double DETA_MAX = 6.4;
 
@@ -102,6 +104,7 @@ inline double wrapDPhi(double d) {
     return d;
 }
 
+// Trigger and Reference particle properties
 struct Trig { double eta, phi; int sp, pb; };
 struct Ref  { double eta, phi; };
 
@@ -116,7 +119,7 @@ int main(int argc, char* argv[]) {
     long n_events        = std::atol(argv[1]);
     int  seed            = std::atoi(argv[2]);
     std::string outFile  = argv[3];
-    std::string progFile = "logs/log_ALICE/progress_task" + std::to_string(seed) + ".txt";
+    std::string progFile = "logs/log_ALICE/progress_task" + std::to_string(seed) + ".txt"; // Progress monitoring and receiving event deatils
 
     Pythia8::Pythia pythia;
     pythia.readString("Print:quiet = on");
@@ -144,9 +147,9 @@ int main(int argc, char* argv[]) {
 
     pythia.init();
 
-    // ---- book histograms (all 1D in delta-phi) ----------------------
+    // ---- book 1-D histograms in delta-phi ----
     // identified-trigger correlations: [class][species][pT bin][TPC_FMD12 / TPC_FMD3]
-    TH1D* hID[NCLS][NSP][NPT][NIDPAIR];
+    TH1D* hID[NCLS][NSP][NpT_bins][NIDPAIR];
     // FMD12-FMD3 (no identified particle, no pT binning)
     TH1D* hFF[NCLS];
     // normalisation
@@ -170,9 +173,9 @@ int main(int argc, char* argv[]) {
     for (int c = 0; c < NCLS; ++c) {
         for (int s = 0; s < NSP; ++s) {
             hNtrig[c][s] = new TH1D(Form("hNtrig_%s_%s", CLS_NAME[c], SP_NAME[s]),
-                                    ";p_{T} (GeV/c);N_{trig}", NPT, PT_EDGES);
+                                    ";p_{T} (GeV/c);N_{trig}", NpT_bins, PT_EDGES);
             hNtrig[c][s]->Sumw2();
-            for (int b = 0; b < NPT; ++b)
+            for (int b = 0; b < NpT_bins; ++b)
                 for (int p = 0; p < NIDPAIR; ++p) {
                     hID[c][s][b][p] = new TH1D(
                         Form("hCorr_%s_%s_%s_pt%d", CLS_NAME[c], PAIR_NAME[p], SP_NAME[s], b),
@@ -246,12 +249,12 @@ int main(int argc, char* argv[]) {
             hNchV0M->Fill(nchV0A + nchV0C);
         }
 
-        bool in[NCLS];
-        classify(nchV0A, nchV0C, nchCent, in);
-        if (in[HM] || in[LM] || in[HM35]) hCounter->Fill(3);
+        bool Ecl[NCLS];
+        classify(nchV0A, nchV0C, nchCent, Ecl);
+        if (Ecl[HM] || Ecl[LM] || Ecl[HM35]) hCounter->Fill(3);
 
         for (int c = 0; c < NCLS; ++c) {
-            if (!in[c]) continue;
+            if (!Ecl[c]) continue;
 
             hEvents[c]->Fill(0.5);
             hNchClass[c]->Fill(nchCent);
@@ -294,7 +297,7 @@ int main(int argc, char* argv[]) {
     for (int c = 0; c < NCLS; ++c) {
         for (int s = 0; s < NSP; ++s) {
             hNtrig[c][s]->Write();
-            for (int b = 0; b < NPT; ++b)
+            for (int b = 0; b < NpT_bins; ++b)
                 for (int p = 0; p < NIDPAIR; ++p) hID[c][s][b][p]->Write();
         }
         hFF[c]->Write();
