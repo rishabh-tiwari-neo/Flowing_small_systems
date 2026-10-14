@@ -147,14 +147,13 @@ int main(int argc, char* argv[]) {
 
     pythia.init();
 
-    // ---- book 1-D histograms in delta-phi ----
+    // Histograms and counters
     // identified-trigger correlations: [class][species][pT bin][TPC_FMD12 / TPC_FMD3]
     TH1D* hID[NCLS][NSP][NpT_bins][NIDPAIR];
     // FMD12-FMD3 (no identified particle, no pT binning)
     TH1D* hFF[NCLS];
     // normalisation
     TH1D* hNtrig[NCLS][NSP];      // identified triggers vs pT (variable bins = PT_EDGES)
-    TH1D* hNtrigFF[NCLS];         // FMD12 particles (trigger arm of FMD12-FMD3), 1 bin
     TH1D* hNassoc[NCLS][2];       // associated particles in FMD12 / FMD3, 1 bin
     TH1D* hEvents[NCLS];          // events per class, 1 bin
     TH1D* hNchClass[NCLS];        // nchCent distribution per class (gives <nchCent> of HM, LM, HM35)
@@ -167,14 +166,12 @@ int main(int argc, char* argv[]) {
     TH1D* hNchCent = new TH1D("hNchCent", "N_{ch} (|#eta|<0.8, 0.2<p_{T}<3.0);N_{ch};events",
                               301, -0.5, 300.5);
     TH1D* hNchV0M  = new TH1D("hNchV0M", "N_{ch} V0A+V0C;N_{ch};events", 401, -0.5, 400.5);
-    hNchCent->Sumw2();
-    hNchV0M->Sumw2();
 
+    //creates histograms for each class, species, pT bin, and pairing
     for (int c = 0; c < NCLS; ++c) {
         for (int s = 0; s < NSP; ++s) {
             hNtrig[c][s] = new TH1D(Form("hNtrig_%s_%s", CLS_NAME[c], SP_NAME[s]),
                                     ";p_{T} (GeV/c);N_{trig}", NpT_bins, PT_EDGES);
-            hNtrig[c][s]->Sumw2();
             for (int b = 0; b < NpT_bins; ++b)
                 for (int p = 0; p < NIDPAIR; ++p) {
                     hID[c][s][b][p] = new TH1D(
@@ -182,39 +179,32 @@ int main(int argc, char* argv[]) {
                         Form("%s %s %s, p_{T} %.2f-%.2f;#Delta#phi;pairs",
                              CLS_NAME[c], PAIR_NAME[p], SP_NAME[s], PT_EDGES[b], PT_EDGES[b + 1]),
                         NDPHI, DPHI_LO, DPHI_HI);
-                    hID[c][s][b][p]->Sumw2();
                 }
         }
+
         hFF[c] = new TH1D(Form("hCorr_%s_FMD12_FMD3", CLS_NAME[c]),
                           Form("%s FMD12_FMD3;#Delta#phi;pairs", CLS_NAME[c]),
                           NDPHI, DPHI_LO, DPHI_HI);
-        hFF[c]->Sumw2();
-        hNtrigFF[c]   = new TH1D(Form("hNtrig_%s_FMD12",  CLS_NAME[c]), "N_{trig} FMD12",  1, 0, 1);
         hNassoc[c][0] = new TH1D(Form("hNassoc_%s_FMD12", CLS_NAME[c]), "N_{assoc} FMD12", 1, 0, 1);
         hNassoc[c][1] = new TH1D(Form("hNassoc_%s_FMD3",  CLS_NAME[c]), "N_{assoc} FMD3",  1, 0, 1);
         hEvents[c]    = new TH1D(Form("hEvents_%s", CLS_NAME[c]), "events", 1, 0, 1);
         hNchClass[c]  = new TH1D(Form("hNchCent_%s", CLS_NAME[c]),
                                  Form("N_{ch} (|#eta|<0.8, 0.2<p_{T}<3.0), %s;N_{ch};events", CLS_NAME[c]),
                                  301, -0.5, 300.5);
-        hNtrigFF[c]->Sumw2();
-        hNassoc[c][0]->Sumw2();
-        hNassoc[c][1]->Sumw2();
-        hEvents[c]->Sumw2();
-        hNchClass[c]->Sumw2();
     }
 
-    // ---- event loop ---------------------------------------------------
+    // ---- event loop ----
     std::vector<Trig> trig;
     std::vector<Ref>  f12, f3;
 
-    for (long li = 0; li < n_events; ++li) {
+    for (long i = 0; i < n_events; ++i) {
 
         if (!pythia.next()) continue;
         hCounter->Fill(1);
 
         trig.clear(); f12.clear(); f3.clear();
 
-        // pass 1: multiplicities + candidate collection
+        // multiplicities and candidate selection
         int nchCent = 0, nchV0A = 0, nchV0C = 0;
         const int entries = pythia.event.size();
         for (int j = 0; j < entries; ++j) {
@@ -249,20 +239,20 @@ int main(int argc, char* argv[]) {
             hNchV0M->Fill(nchV0A + nchV0C);
         }
 
+        // Event classification
         bool Ecl[NCLS];
         classify(nchV0A, nchV0C, nchCent, Ecl);
         if (Ecl[HM] || Ecl[LM] || Ecl[HM35]) hCounter->Fill(3);
-
         for (int c = 0; c < NCLS; ++c) {
             if (!Ecl[c]) continue;
 
             hEvents[c]->Fill(0.5);
             hNchClass[c]->Fill(nchCent);
-            hNtrigFF[c]->Fill(0.5, (double)f12.size());
             hNassoc[c][0]->Fill(0.5, (double)f12.size());
             hNassoc[c][1]->Fill(0.5, (double)f3.size());
 
-            // pass 2: pairs
+
+            // pairing loops
             for (const Trig& t : trig) {
                 hNtrig[c][t.sp]->Fill(0.5 * (PT_EDGES[t.pb] + PT_EDGES[t.pb + 1]));
 
@@ -285,14 +275,15 @@ int main(int argc, char* argv[]) {
                 }
         }
 
-        if (li % 100 == 0 || li == n_events - 1) {
+        // progress monitoring every 100th event
+        if (i % 100 == 0 || i == n_events - 1) {
             std::ofstream pf(progFile);
-            pf << (li + 1);
+            pf << (i + 1);
             pf.close();
         }
     }
 
-    // ---- write --------------------------------------------------------
+    // ---- write ----
     TFile* fout = new TFile(outFile.c_str(), "RECREATE");
     for (int c = 0; c < NCLS; ++c) {
         for (int s = 0; s < NSP; ++s) {
@@ -301,7 +292,6 @@ int main(int argc, char* argv[]) {
                 for (int p = 0; p < NIDPAIR; ++p) hID[c][s][b][p]->Write();
         }
         hFF[c]->Write();
-        hNtrigFF[c]->Write();
         hNassoc[c][0]->Write();
         hNassoc[c][1]->Write();
         hEvents[c]->Write();
