@@ -3,6 +3,7 @@
 //   run:    ./post/analyser [data/test_run/merged.root]
 #include <cstdio>
 #include <cmath>
+#include <algorithm>
 #include <vector>
 #include <string>
 #include "TFile.h"
@@ -81,6 +82,11 @@ int main(int argc, char* argv[]) {
 
     Acc acc[NCLS];
 
+    // per-V0M-value accumulators for the top-fraction scan (registered events only)
+    const int VMAX = 1000;
+    std::vector<double> cntV(VMAX, 0.0), sumV(VMAX, 0.0), cnt25(VMAX, 0.0), sum25(VMAX, 0.0);
+    long nReg = 0;
+
     for (long i = 0; i < nEntries; ++i) {
         tree->GetEntry(i);
 
@@ -89,6 +95,13 @@ int main(int argc, char* argv[]) {
         const bool v0cut = (v0m > thr);
         const bool hm    = v0cut && nchCent > 25;   // no coincidence requirement, as in the ROOT-prompt numbers
         const bool lm    = coinc && nchCent < 20;
+
+        if (coinc) {
+            ++nReg;
+            const int vi = std::min(v0m, VMAX - 1);
+            cntV[vi] += 1;  sumV[vi] += nchCent;
+            if (nchCent > 25) { cnt25[vi] += 1; sum25[vi] += nchCent; }
+        }
 
         long sp[NSP] = {0, 0, 0, 0, 0};
         const size_t n = pid->size();
@@ -153,6 +166,44 @@ int main(int argc, char* argv[]) {
         auto r = [&](int a, int b) { return acc[c].sp[b] ? (double)acc[c].sp[a] / acc[c].sp[b] : 0.0; };
         printf("  %-5s %8.4f %8.4f %8.4f %10.4f %8.4f\n", kClsName[c],
                r(1, 0), r(2, 0), r(3, 1), r(4, 3), r(4, 2));
+    }
+
+    // ---- top-fraction scan on V0M: which fraction gives <nchCent> ~ 35 ----
+    printf("\n=== Top-fraction scan on V0M (fractions of %ld registered events) ===\n", nReg);
+    printf("  <nchCent> target in the paper: ~35 (HM also requires nchCent > 25)\n");
+    printf("  %9s %7s %9s %11s | %9s %13s\n",
+           "top frac", "V0M>=", "events", "<nchCent>", "events", "<nchCent>25");
+    const int NF = 16;
+    const double fr[NF] = {0.0007, 0.001, 0.002, 0.003, 0.005, 0.007, 0.01, 0.02,
+                           0.03, 0.05, 0.07, 0.1, 0.15, 0.2, 0.3, 0.5};
+    {
+        double cc = 0, cs = 0, c25 = 0, s25 = 0;
+        int fi = 0;
+        for (int v = VMAX - 1; v >= 0 && fi < NF; --v) {
+            cc += cntV[v];  cs += sumV[v];
+            c25 += cnt25[v]; s25 += sum25[v];
+            while (fi < NF && cc >= fr[fi] * nReg) {
+                printf("  %8.3f%% %7d %9.0f %11.2f | %9.0f %13.2f\n",
+                       100.0 * cc / nReg, v, cc, cc ? cs / cc : 0.0,
+                       c25, c25 ? s25 / c25 : 0.0);
+                ++fi;
+            }
+        }
+    }
+    {
+        double c = 0, sm = 0, c2 = 0, s2 = 0;
+        int vA = -1, vB = -1;
+        double fA = 0, fB = 0;
+        for (int v = VMAX - 1; v >= 0; --v) {
+            c += cntV[v];  sm += sumV[v];
+            c2 += cnt25[v]; s2 += sum25[v];
+            if (vA < 0 && c > 0  && sm / c  <= 35.0) { vA = v; fA = c / nReg; }
+            if (vB < 0 && c2 > 0 && s2 / c2 <= 35.0) { vB = v; fB = c2 / nReg; }
+        }
+        if (vA >= 0) printf("  <nchCent> first drops to 35 at V0M >= %d, top %.3f%% of events\n", vA, 100.0 * fA);
+        else         printf("  <nchCent> never drops to 35 in this scan\n");
+        if (vB >= 0) printf("  with nchCent>25: mean first drops to 35 at V0M >= %d (%.3f%% of events pass)\n", vB, 100.0 * fB);
+        else         printf("  with nchCent>25: mean stays above 35 for every V0M threshold\n");
     }
 
     f->Close();
