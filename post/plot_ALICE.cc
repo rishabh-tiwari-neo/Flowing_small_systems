@@ -1,12 +1,8 @@
 // plot_ALICE.cc
-// usage: ./plot_ALICE results.root outdir      (outdir must already exist)
-// Makes v2_vs_pt, v2sq_vs_pt and V2D_pairings (PDF + PNG).
-// Mesons are blue/cyan, baryons red/orange.
-// All ROOT objects are created with new (heap) on purpose.
+// Makes v2sq_vs_pt, v2_vs_pt, and V2D_pt from pairings.
 
 #include <iostream>
 #include <string>
-#include <cmath>
 #include <algorithm>
 #include "TROOT.h"
 #include "TStyle.h"
@@ -19,12 +15,12 @@
 #include "TLatex.h"
 #include "TString.h"
 
-static const int NSP = 5;                                   // same order as post_ALICE
+static const int NSP = 5;
 static const char* SP_NAME[NSP]  = {"pi", "K", "p", "K0S", "Lam"};
 static const char* SP_LABEL[NSP] = {"#pi^{#pm}", "K^{#pm}", "p+#bar{p}",
                                     "K^{0}_{S}", "#Lambda+#bar{#Lambda}"};
-static const int   SP_COLOR[NSP] = {kBlue + 1, kAzure + 1, kRed + 1, kCyan + 2, kOrange + 7};
-static const int   SP_MARKER[NSP] = {20, 21, 33, 22, 34};
+static const int   SP_COLOR[NSP] = {kBlue, kAzure, kRed, kCyan, kOrange};
+static const int   SP_MARKER[NSP] = {20, 34, 21, 22, 33};
 
 static int frameCounter = 0;
 

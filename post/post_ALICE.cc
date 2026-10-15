@@ -1,15 +1,6 @@
 // post_ALICE.cc
-// usage: ./post_ALICE merged.root out_base [HM|HM35]
-//
-// For every (pairing, species, pT bin):
-//   Y_sig = F*Y_LM + G*[1 + 2 V2 cos(2 dphi) + 2 V3 cos(3 dphi)]
-// is solved by weighted least squares (linear in F, G, a2 = 2*G*V2, a3 = 2*G*V3).
-// Then v2^2 = V2D(TPC-FMD12) * V2D(TPC-FMD3) / V2D(FMD12-FMD3), signed.
-//
-// The pT bins are read from the hNtrig histograms in the file, so nothing about
-// the number or the edges of the bins is typed in here.
-//
-// Output: <out_base>.root (TGraphErrors) and <out_base>.csv
+// weighted linear least-squares fitting with analytical covariance-based error estimation.
+// The LM template is treated as exact, so its error is not in the V2Δ uncertainty.
 
 #include <iostream>
 #include <fstream>
@@ -26,6 +17,7 @@
 static const int NSP = 5;
 static const char* SP_NAME[NSP] = {"pi", "K", "p", "K0S", "Lam"};
 
+// initialising the fit results
 struct FitResult {
     bool   ok      = false;
     double V2      = 0;
@@ -67,7 +59,7 @@ static FitResult templateFit(const TH1D* hs, const TH1D* ht) {
     const double is = hs->Integral(), it = ht->Integral();
     if (is <= 0 || it <= 0) return res;
 
-    // both histograms scaled to unit area (does not change V2)
+    // both histograms normalised to unit area 
     std::vector<double> y, e, t, ph;
     for (int i = 1; i <= hs->GetNbinsX(); ++i) {
         const double err = hs->GetBinError(i) / is;
@@ -100,7 +92,7 @@ static FitResult templateFit(const TH1D* hs, const TH1D* ht) {
     const double G = p[1], a2 = p[2];
     if (G <= 0) return res;
 
-    // V2 = a2 / (2G)
+    // V2_delta = a2 / (2G)
     const double dA = 1.0 / (2.0 * G);
     const double dG = -a2 / (2.0 * G * G);
     const double var = dA * dA * C[2][2] + dG * dG * C[1][1] + 2.0 * dA * dG * C[2][1];
@@ -155,7 +147,7 @@ int main(int argc, char* argv[]) {
     csv << "species,pt_low,pt_high,V2D_TPC_FMD12,err,chi2ndf,V2D_TPC_FMD3,err,chi2ndf,"
            "V2D_FMD12_FMD3,err,chi2ndf,v2sq,err,v2,err\n";
 
-    // ---- reference: FMD12 - FMD3 (one number, no pT dependence) -------
+    // ---- reference: FMD12 - FMD3 (one number, no pT dependence) -----
     const FitResult fc = templateFit(getH(fin, Form("hCorr_%s_FMD12_FMD3", cls.c_str())),
                                      getH(fin, "hCorr_LM_FMD12_FMD3"));
     std::cout << "Class " << cls << ", template LM\n";
@@ -169,7 +161,7 @@ int main(int argc, char* argv[]) {
     if (fc.ok) { gRef->SetPoint(0, 0.0, fc.V2); gRef->SetPointError(0, 0.0, fc.err); }
     gRef->Write();
 
-    // ---- identified species -------------------------------------------
+    // ---- identified species -----
     for (int s = 0; s < NSP; ++s) {
         const char* sp = SP_NAME[s];
         TH1D* hN = getH(fin, Form("hNtrig_%s_%s", cls.c_str(), sp));
