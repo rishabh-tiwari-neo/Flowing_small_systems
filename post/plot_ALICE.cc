@@ -1,9 +1,5 @@
 // plot_ALICE.cc
 // Makes v2_vs_pt, v2sq_vs_pt, V2D_TPC_FMD12, V2D_TPC_FMD3 and V2D_FMD12_FMD3.
-// usage: ./post/plot_ALICE            plots every class in CLASSES
-//        ./post/plot_ALICE HM35       plots one class only
-// run from the project root. For each class it reads
-//   data/data_ALICE/v2_results_<class>.root   and writes into   plots/plot_ALICE_<class>/
 
 #include <iostream>
 #include <string>
@@ -110,7 +106,7 @@ static void drawPad(TFile* f, const char* prefix, const char* ytitle, double cla
     leg->Draw();
 }
 
-// Draws the single FMD1,2-FMD3 point (no species, no pT dependence) into the current pad.
+// Draws the single FMD1,2-FMD3 point into the current pad.
 static void drawRef(TFile* f) {
     TGraphErrors* gr = dynamic_cast<TGraphErrors*>(f->Get("V2D_FMD12_FMD3"));
     if (!gr || gr->GetN() == 0) { std::cerr << "No graph found for V2D_FMD12_FMD3" << std::endl; return; }
@@ -122,7 +118,6 @@ static void drawRef(TFile* f) {
 
     setMargins();
 
-    // ---- frame with a single x slot; x tick labels removed, the title names the pairing ----
     TH1F* fr = new TH1F(Form("frame%d", frameCounter++), "", 1, -1, 1);
     fr->SetStats(0);
     fr->SetMinimum(lo - margin);
@@ -169,7 +164,7 @@ static bool plotClass(const std::string& cls) {
     // v2 vs pT
     TCanvas* c1 = new TCanvas(Form("c_v2_%s", cls.c_str()), "v2", 800, 600);
     c1->cd();
-    drawPad(f, "v2", "v_{2}", 1.0);
+    drawPad(f, "v2", "#sqrt{|v_{2}^{2}|}", 1.0);;
     save(c1, outdir, "v2_vs_pt");
 
     // v2^2 vs pT

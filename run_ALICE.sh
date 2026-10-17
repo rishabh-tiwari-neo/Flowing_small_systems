@@ -21,7 +21,7 @@ if [ ! -x "$GEN_BIN" ]; then
     exit 1
 fi
 
-mkdir -p "$DATA_DIR" "$LOG_DIR" plots/plot_ALICE_HM plots/plot_ALICE_HM35
+mkdir -p "$DATA_DIR" "$LOG_DIR"
 rm -f "$LOG_DIR"/progress_task*.txt "$LOG_DIR"/task*.log "$LOG_DIR"/summary.log
 rm -f "$DATA_DIR"/output_task*.root
 
