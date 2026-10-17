@@ -139,7 +139,7 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
     TFile* fout = new TFile((outBase + ".root").c_str(), "RECREATE");
     std::ofstream csv(outBase + ".csv");
     csv << "species,pt_low,pt_high,V2D_TPC_FMD12,err,chi2ndf,V2D_TPC_FMD3,err,chi2ndf,"
-           "V2D_FMD12_FMD3,err,chi2ndf,v2sq,err,v2,err\n";
+           "V2D_FMD12_FMD3,err,chi2ndf,v2sq,err\n";
 
     // ---- reference: FMD12 - FMD3 (one number, no pT dependence) -----
     const FitResult fc = templateFit(getH(fin, Form("hCorr_%s_FMD12_FMD3", cls.c_str())),
@@ -165,10 +165,9 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
         TGraphErrors* gA = new TGraphErrors(); gA->SetName(Form("V2D_TPC_FMD12_%s", sp));
         TGraphErrors* gB = new TGraphErrors(); gB->SetName(Form("V2D_TPC_FMD3_%s",  sp));
         TGraphErrors* gS = new TGraphErrors(); gS->SetName(Form("v2sq_%s", sp));
-        TGraphErrors* gV = new TGraphErrors(); gV->SetName(Form("v2_%s",   sp));
 
         std::printf("\n== %s ==\n", sp);
-        std::printf("%-11s %-24s %-24s %-24s\n", "pT", "V2D TPC-FMD12", "V2D TPC-FMD3", "v2");
+        std::printf("%-11s %-24s %-24s %-24s\n", "pT", "V2D TPC-FMD12", "V2D TPC-FMD3", "v2sq");
 
         for (int b = 0; b < nb; ++b) {
             const double lo = hN->GetBinLowEdge(b + 1);
@@ -185,34 +184,30 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
             if (fa.ok) { int n = gA->GetN(); gA->SetPoint(n, x, fa.V2); gA->SetPointError(n, ex, fa.err); }
             if (fb.ok) { int n = gB->GetN(); gB->SetPoint(n, x, fb.V2); gB->SetPointError(n, ex, fb.err); }
 
-            // signed v2^2 = Va*Vb/Vc ; v2 = sign*sqrt(|v2^2|)
+            // signed v2^2 = Va*Vb/Vc 
             bool   okC = fa.ok && fb.ok && fc.ok && fa.V2 != 0 && fb.V2 != 0 && fc.V2 != 0;
-            double v2sq = 0, ev2sq = 0, v2 = 0, ev2 = 0;
+            double v2sq = 0, ev2sq = 0;
             if (okC) {
                 v2sq = fa.V2 * fb.V2 / fc.V2;
                 const double ra = fa.err / fa.V2, rb = fb.err / fb.V2, rc = fc.err / fc.V2;
                 const double rel = std::sqrt(ra * ra + rb * rb + rc * rc);
                 ev2sq = std::fabs(v2sq) * rel;
-                v2    = (v2sq >= 0 ? 1.0 : -1.0) * std::sqrt(std::fabs(v2sq));
-                ev2   = 0.5 * std::fabs(v2) * rel;
                 int n = gS->GetN(); gS->SetPoint(n, x, v2sq); gS->SetPointError(n, ex, ev2sq);
-                n = gV->GetN();     gV->SetPoint(n, x, v2);   gV->SetPointError(n, ex, ev2);
             }
 
             std::printf("%4.2f-%-5.2f  %s  %s  %s\n", lo, hi,
                         fa.ok ? Form("%+.3e +- %.2e", fa.V2, fa.err) : "fit failed             ",
                         fb.ok ? Form("%+.3e +- %.2e", fb.V2, fb.err) : "fit failed             ",
-                        okC   ? Form("%+.3e +- %.2e", v2, ev2)       : "undefined              ");
+                        okC   ? Form("%+.3e +- %.2e", v2sq, ev2sq)   : "undefined              ");
 
             csv << sp << "," << lo << "," << hi << ","
                 << num(fa.V2, fa.ok) << "," << num(fa.err, fa.ok) << "," << num(fa.chi2ndf, fa.ok) << ","
                 << num(fb.V2, fb.ok) << "," << num(fb.err, fb.ok) << "," << num(fb.chi2ndf, fb.ok) << ","
                 << num(fc.V2, fc.ok) << "," << num(fc.err, fc.ok) << "," << num(fc.chi2ndf, fc.ok) << ","
-                << num(v2sq, okC) << "," << num(ev2sq, okC) << ","
-                << num(v2, okC)   << "," << num(ev2, okC) << "\n";
+                << num(v2sq, okC) << "," << num(ev2sq, okC) << "\n";
         }
 
-        gA->Write(); gB->Write(); gS->Write(); gV->Write();
+        gA->Write(); gB->Write(); gS->Write();
     }
 
     csv.close();
