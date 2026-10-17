@@ -37,7 +37,7 @@ main/
   - LM: nchCent < 20 (the non-flow template)
 - Same-event pairing, filling Delta-phi histograms directly (no mixed-event step; the generator has perfect acceptance):
   - TPC-FMD1,2 and TPC-FMD3 (identified trigger with a charged reference particle),
-  - FMD1,2-FMD3 (two unidentified reference sets, all pT, no pT bins: one number per class),
+  - FMD1,2-FMD3 (two unidentified reference sets, all pT, no pT bins, no species dependence),
   - only pairs with 1.1 < |Delta-eta| < 6.4 are kept.
 
 ## What the post-processing does
