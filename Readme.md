@@ -86,7 +86,7 @@ Note: a new run writes into the output folder and removes the old task output th
 
 Compile (first time, or after editing the programs):
 
-In the main file run
+In the main folder run
 ```
 make 
 ```
@@ -105,12 +105,6 @@ Files and folders used (set as constants at the top of the programs):
 - `plot_ALICE` reads `data/data_ALICE/v2_results_<class>.root` and writes into `plots/plot_ALICE_<class>/` (the folder is created if missing).
 - The class list (HM, HM35) is defined in both `post_ALICE.cc` and `plot_ALICE.cc`; add a class in both.
 
-The analyser is still run on its own:
-
-```
-./post/analyser_ALICE data/data_ALICE/merged.root
-```
-
 ### 4. Monitoring a run
 
 - Progress files: `logs/log_ALICE/progress_task<seed>.txt` (one number per task: events done).
@@ -119,8 +113,6 @@ The analyser is still run on its own:
 ### 5. How to read the results
 
 - The main result is V2Delta per species and pT bin, for TPC-FMD1,2 and TPC-FMD3, plus the single V2Delta(FMD1,2-FMD3) per class.
-- v2 from 3x2PC is only meaningful where both TPC V2Delta values have the same sign as the reference. A negative v2^2 means the combination failed (statistical noise or factorisation breaking), not negative flow. A positive v2 from two negative V2Delta is not flow either.
-- When the reference is consistent with zero, or the TPC V2Delta have the opposite sign, report V2Delta per species with errors instead of v2.
 
 ### 6. Things to keep in mind
 
