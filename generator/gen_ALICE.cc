@@ -38,9 +38,9 @@ static const double PID_ETA_MAX = 0.8;   // pi, K, p: |eta| < 0.8
 static const double V0_Y_MAX    = 0.5;   // K0S, Lambda: |y| < 0.5
 
 // ---- common pT binning for all species ----
-static const int    NpT_bins = 16;
+static const int    NpT_bins = 20;
 static const double PT_EDGES[NpT_bins + 1] = {0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0,
-                                         2.25, 2.5, 2.75, 3.0,3.25, 3.5, 4.0, 5.0, 10.0};
+                                         2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 10.0};
 
 // Cataloging the pT bin of a particle
 inline int ptBin(double pt) {

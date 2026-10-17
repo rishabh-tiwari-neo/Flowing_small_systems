@@ -1,6 +1,7 @@
 #!/bin/bash
 # Hardcoded run configuration
-TOTAL=100000
+TOTAL=10000
+
 NCORES=4
 
 GEN_BIN="generator/gen_ALICE"
@@ -20,7 +21,7 @@ if [ ! -x "$GEN_BIN" ]; then
     exit 1
 fi
 
-mkdir -p "$DATA_DIR" "$LOG_DIR" plots/plot_ALICE
+mkdir -p "$DATA_DIR" "$LOG_DIR"
 rm -f "$LOG_DIR"/progress_task*.txt "$LOG_DIR"/task*.log "$LOG_DIR"/summary.log
 rm -f "$DATA_DIR"/output_task*.root
 
@@ -110,8 +111,13 @@ TOTAL_RUNTIME=$((END_TIME - START_TIME))
 
 echo "All tasks finished in ${TOTAL_RUNTIME}s. Merging..."
 
-hadd -f "$DATA_DIR/merged.root" "$DATA_DIR"/output_task*.root
-echo "Merged file: $DATA_DIR/merged.root"
+MERGED="$DATA_DIR/merged.root"
+hadd -f "$MERGED" "$DATA_DIR"/output_task*.root
+if [ $? -ne 0 ]; then
+    echo "hadd failed. Aborting."
+    exit 1
+fi
+echo "Merged file: $MERGED"
 
 # --- write summary log ---
 {
@@ -137,4 +143,38 @@ echo "Summary written to $LOG_DIR/summary.log"
 # clean up progress files
 rm -f "$LOG_DIR"/progress_task*.txt
 
-echo "Done. Next step: run post/post_ALICE on $DATA_DIR/merged.root"
+# --- post-processing: template fit and plots ---
+if [ ! -f "$MERGED" ]; then
+    echo "Merged file $MERGED not found. Aborting."
+    exit 1
+fi
+
+echo "Compiling post_ALICE and plot_ALICE..."
+g++ -O2 -o post/post_ALICE post/post_ALICE.cc `root-config --cflags --libs`
+if [ $? -ne 0 ]; then
+    echo "post_ALICE build failed. Aborting."
+    exit 1
+fi
+g++ -O2 -o post/plot_ALICE post/plot_ALICE.cc `root-config --cflags --libs`
+if [ $? -ne 0 ]; then
+    echo "plot_ALICE build failed. Aborting."
+    exit 1
+fi
+
+echo ""
+echo "=== Fitting ==="
+./post/post_ALICE 2>&1 | tee "$LOG_DIR/post_all.txt"
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    echo "post_ALICE failed. Aborting."
+    exit 1
+fi
+
+echo "=== Plotting ==="
+./post/plot_ALICE
+if [ $? -ne 0 ]; then
+    echo "plot_ALICE failed. Aborting."
+    exit 1
+fi
+
+echo ""
+echo "Done. Results in $DATA_DIR, plots in plots/plot_ALICE_HM and plots/plot_ALICE_HM35."
