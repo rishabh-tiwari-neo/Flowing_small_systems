@@ -6,7 +6,7 @@ Welcome! This study is on long-range correlations and flow signatures in small s
 
 ```
 main/
-├── run_ALICE.sh            # Runs generation (parallel tasks), merges, then fits and plots automatically
+├── run_ALICE.sh            # Runs generation, merges, then fits and plots automatically
 ├── run_test.sh             # test run script
 ├── Makefile                # Auto-detects ROOT via root-config; requires the PYTHIA8 environment variable
 ├── generator/
@@ -18,7 +18,7 @@ main/
 │   └── plot_ALICE.cc       # Makes the plots from the post-processing output
 ├── data/                   # ROOT files (one sub-folder per generation run)
 ├── logs/                   # Seeds, per-task logs, progress files, summaries, fit tables
-├── plots/                  # Finished plots (one sub-folder per class)
+├── plots/                  # Finished plots 
 └── Readme.md               # You are here
 ```
 
