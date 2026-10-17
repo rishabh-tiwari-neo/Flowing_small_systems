@@ -16,6 +16,8 @@
 
 static const int NSP = 5;
 static const char* SP_NAME[NSP] = {"pi", "K", "p", "K0S", "Lam"};
+static const char* DATA_DIR = "data/data_ALICE";
+static const std::vector<std::string> CLASSES = {"HM", "HM35"};
 
 // initialising the fit results
 struct FitResult {
@@ -127,15 +129,7 @@ static std::string num(double v, bool ok) {
     return b;
 }
 
-int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " merged.root out_base [HM|HM35]" << std::endl;
-        return 1;
-    }
-    const std::string inFile  = argv[1];
-    const std::string outBase = argv[2];
-    const std::string cls     = (argc > 3) ? argv[3] : "HM";
-
+static int runClass(const std::string& inFile, const std::string& outBase, const std::string& cls) {
     TFile* fin = TFile::Open(inFile.c_str(), "READ");
     if (!fin || fin->IsZombie()) {
         std::cerr << "Cannot open " << inFile << std::endl;
@@ -224,6 +218,14 @@ int main(int argc, char* argv[]) {
     csv.close();
     fout->Close();
     fin->Close();
-    std::cout << "\nWrote " << outBase << ".root and " << outBase << ".csv" << std::endl;
+    std::cout << "\nWrote " << outBase << ".root and " << outBase << ".csv\n" << std::endl;
     return 0;
+}
+
+int main() {
+    int failed = 0;
+    for (const std::string& cls : CLASSES)
+        if (runClass(std::string(DATA_DIR) + "/merged.root",
+                     std::string(DATA_DIR) + "/v2_results_" + cls, cls) != 0) ++failed;
+    return failed ? 1 : 0;
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Hardcoded run configuration
-TOTAL=100000
+TOTAL=10000
 
 NCORES=4
 
@@ -161,25 +161,20 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-for CLS in HM HM35; do
-    RES="$DATA_DIR/v2_results_$CLS"
-    PLOT_DIR="plots/plot_ALICE_$CLS"
+echo ""
+echo "=== Fitting ==="
+./post/post_ALICE 2>&1 | tee "$LOG_DIR/post_all.txt"
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    echo "post_ALICE failed. Aborting."
+    exit 1
+fi
 
-    echo ""
-    echo "=== Fitting class $CLS ==="
-    ./post/post_ALICE "$MERGED" "$RES" "$CLS" 2>&1 | tee "$LOG_DIR/post_$CLS.txt"
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then
-        echo "post_ALICE failed for $CLS. Aborting."
-        exit 1
-    fi
-
-    echo "=== Plotting class $CLS ==="
-    ./post/plot_ALICE "$RES.root" "$PLOT_DIR"
-    if [ $? -ne 0 ]; then
-        echo "plot_ALICE failed for $CLS. Aborting."
-        exit 1
-    fi
-done
+echo "=== Plotting ==="
+./post/plot_ALICE
+if [ $? -ne 0 ]; then
+    echo "plot_ALICE failed. Aborting."
+    exit 1
+fi
 
 echo ""
 echo "Done. Results in $DATA_DIR, plots in plots/plot_ALICE_HM and plots/plot_ALICE_HM35."

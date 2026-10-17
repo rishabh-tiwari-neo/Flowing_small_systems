@@ -1,4 +1,4 @@
-[task 2] started Thu Oct 15 02:24:18 PM IST 2026, seed=501627239, events=25000
+[task 2] started Fri Oct 16 06:20:43 PM IST 2026, seed=213610519, events=2500
 
  *------------------------------------------------------------------------------------* 
  |                                                                                    | 
@@ -9,7 +9,7 @@
  |  |   P  P   Y Y     T    H   H   I    A A     This is PYTHIA version 8.316      |  | 
  |  |   PPP     Y      T    HHHHH   I   AAAAA    Last date of change:  3 Oct 2025  |  | 
  |  |   P       Y      T    H   H   I   A   A                                      |  | 
- |  |   P       Y      T    H   H  III  A   A    Now is 15 Oct 2026 at 14:24:18    |  | 
+ |  |   P       Y      T    H   H  III  A   A    Now is 16 Oct 2026 at 18:20:43    |  | 
  |  |                                                                              |  | 
  |  |   Program documentation and an archive of historic versions is found on:     |  | 
  |  |                                                                              |  | 
@@ -43,5 +43,5 @@
  |                                                                                    | 
  *------------------------------------------------------------------------------------* 
 
-[seed 501627239] Done. Wrote data/data_ALICE/output_task2.root (events=25000, HM=17.000, LM=19084.000, HM35=3341.000)
-[task 2] finished Thu Oct 15 02:26:36 PM IST 2026, runtime=138s
+[seed 213610519] Done. Wrote data/data_ALICE/output_task2.root (events=2500, HM=2.000, LM=1914.000, HM35=325.000)
+[task 2] finished Fri Oct 16 06:20:58 PM IST 2026, runtime=15s
