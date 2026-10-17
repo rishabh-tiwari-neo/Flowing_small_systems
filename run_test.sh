@@ -7,6 +7,7 @@ GEN_BIN="generator/stat_check"
 SRC="generator/stat_check.cc"
 OUT_DIR="data/test_run"
 LOG_DIR="logs/test_run"
+STAT_FILE="$OUT_DIR/stat_ALICE.root"    # merged file, read by post/analyser_ALICE
 
 # --- clear old binary and recompile ---
 echo "Removing old binary..."
@@ -21,7 +22,7 @@ fi
 echo "Build OK."
 
 mkdir -p "$OUT_DIR" "$LOG_DIR" logs
-rm -f "$OUT_DIR"/output_task*.root "$OUT_DIR"/merged.root
+rm -f "$OUT_DIR"/output_task*.root "$STAT_FILE"
 rm -f "$LOG_DIR"/task*.log "$LOG_DIR"/summary.log
 
 BASE=$((TOTAL / NCORES))
@@ -109,8 +110,8 @@ TOTAL_RUNTIME=$((END_TIME - START_TIME))
 
 echo "All tasks finished in ${TOTAL_RUNTIME}s. Merging..."
 
-hadd -f $OUT_DIR/merged.root $OUT_DIR/output_task*.root
-echo "Merged file: $OUT_DIR/merged.root"
+hadd -f $STAT_FILE $OUT_DIR/output_task*.root
+echo "Merged file: $STAT_FILE"
 
 # --- write summary log ---
 {

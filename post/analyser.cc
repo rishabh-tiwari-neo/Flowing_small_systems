@@ -1,6 +1,8 @@
-// Analyser for the stat_check output (tree "events").
-//   build:  make post/analyser          (from ~/project/V2delta/main)
-//   run:    ./post/analyser [data/test_run/merged.root]
+// Analyser for the stat_check output (tree "events"), early statistics and understanding.
+//   build:  g++ -O2 -o post/analyser_ALICE post/analyser_ALICE.cc `root-config --cflags --libs`
+//   run:    ./post/analyser_ALICE                 (reads data/test_run/stat_ALICE.root)
+//           ./post/analyser_ALICE other.root      (optional: another file)
+// run from the project root (~/project/V2delta/main)
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -9,6 +11,9 @@
 #include "TFile.h"
 #include "TTree.h"
 #include "TH1D.h"
+
+// ---- default input file ----
+static const char* STAT_FILE = "data/test_run/stat_ALICE.root";
 
 static const int NCLS = 4, NWIN = 5, NSP = 5;
 static const char* kClsName[NCLS] = {"ALL", "HM", "LM", "V0M-cut only"};
@@ -32,7 +37,7 @@ struct Acc {
 };
 
 int main(int argc, char* argv[]) {
-    std::string inFile = (argc > 1) ? argv[1] : "data/test_run/merged.root";
+    std::string inFile = (argc > 1) ? argv[1] : STAT_FILE;
 
     TFile* f = TFile::Open(inFile.c_str());
     if (!f || f->IsZombie()) { fprintf(stderr, "Cannot open %s\n", inFile.c_str()); return 1; }
