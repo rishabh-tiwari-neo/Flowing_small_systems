@@ -80,16 +80,15 @@ Settings at the top of `run_ALICE.sh`:
 - `TOTAL`: total number of events.
 - `NCORES`: number of parallel tasks.
 
-Note: a new run writes into the output folder and removes the old task output there. To keep earlier results, copy or rename the folder first, and never merge files made with different pT binnings or different settings.
+Note: a new run writes into the output folder and removes the old task output there. To keep earlier results, copy or rename the folder first.
 
 ### 3. Run the post-processing by hand
 
 Compile (first time, or after editing the programs):
 
+In the main file run
 ```
-g++ -O2 -o post/analyser_ALICE post/analyser_ALICE.cc `root-config --cflags --libs`
-g++ -O2 -o post/post_ALICE     post/post_ALICE.cc     `root-config --cflags --libs`
-g++ -O2 -o post/plot_ALICE     post/plot_ALICE.cc     `root-config --cflags --libs`
+make 
 ```
 
 Run from the project root, no arguments needed:
