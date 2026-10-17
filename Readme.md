@@ -1,16 +1,17 @@
 # Long-range correlations and flow signatures in small systems
 
-Welcome! This repository studies long-range correlations and flow signatures in small systems (pp collisions at 13 TeV) using PYTHIA8 with string shoving and rope hadronisation. It follows the analysis strategy of the ALICE papers on ultra-long-range correlations and partonic flow.
+Welcome! This study is on long-range correlations and flow signatures in small systems (pp collisions at 13 TeV) using PYTHIA8 with string shoving and rope hadronisation. It follows the analysis strategy of the ALICE papers on ultra-long-range correlations and partonic flow.
 
 ## Layout
 
 ```
 main/
 ├── run_ALICE.sh            # Runs generation (parallel tasks), merges, then fits and plots automatically
-├── run.sh, run_test.sh     # Older / test run scripts
+├── run_test.sh             # test run script
 ├── Makefile                # Auto-detects ROOT via root-config; requires the PYTHIA8 environment variable
 ├── generator/
-│   └── gen_ALICE.cc        # PYTHIA8 generator + event loop (see below)
+│   └── gen_ALICE.cc        # PYTHIA8 generator for ALICE-like generation
+│   └── stat_.cc            # PYTHIA8 generator for checking statistics in the above given configuration (need for pre-run)
 ├── post/
 │   ├── analyser_ALICE.cc   # Prints event, multiplicity and trigger statistics of a merged file
 │   ├── post_ALICE.cc       # Template fit, V2Delta extraction, 3x2PC combination -> v2(pT)
