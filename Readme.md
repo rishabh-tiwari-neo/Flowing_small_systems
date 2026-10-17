@@ -1,23 +1,24 @@
 # Long-range correlations and flow signatures in small systems
 
-Welcome! This repository studies long-range correlations and flow signatures in small systems (pp collisions at 13 TeV) using PYTHIA8 with string shoving and rope hadronisation. It follows the analysis strategy of the ALICE papers on ultra-long-range correlations and partonic flow.
+Welcome! This study is on long-range correlations and flow signatures in small systems (pp collisions at 13 TeV) using PYTHIA8 with string shoving and rope hadronisation. It follows the analysis strategy of the ALICE papers on ultra-long-range correlations and partonic flow.
 
 ## Layout
 
 ```
 main/
-├── run_ALICE.sh            # Runs generation (parallel tasks), merges, then fits and plots automatically
-├── run.sh, run_test.sh     # Older / test run scripts
+├── run_ALICE.sh            # Runs generation, merges, then fits and plots automatically
+├── run_test.sh             # test run script
 ├── Makefile                # Auto-detects ROOT via root-config; requires the PYTHIA8 environment variable
 ├── generator/
-│   └── gen_ALICE.cc        # PYTHIA8 generator + event loop (see below)
+│   └── gen_ALICE.cc        # PYTHIA8 generator for ALICE-like generation
+│   └── stat_.cc            # PYTHIA8 generator for checking statistics in the above given configuration (need for pre-run)
 ├── post/
 │   ├── analyser_ALICE.cc   # Prints event, multiplicity and trigger statistics of a merged file
 │   ├── post_ALICE.cc       # Template fit, V2Delta extraction, 3x2PC combination -> v2(pT)
 │   └── plot_ALICE.cc       # Makes the plots from the post-processing output
 ├── data/                   # ROOT files (one sub-folder per generation run)
 ├── logs/                   # Seeds, per-task logs, progress files, summaries, fit tables
-├── plots/                  # Finished plots (one sub-folder per class)
+├── plots/                  # Finished plots 
 └── Readme.md               # You are here
 ```
 
@@ -36,7 +37,7 @@ main/
   - LM: nchCent < 20 (the non-flow template)
 - Same-event pairing, filling Delta-phi histograms directly (no mixed-event step; the generator has perfect acceptance):
   - TPC-FMD1,2 and TPC-FMD3 (identified trigger with a charged reference particle),
-  - FMD1,2-FMD3 (two unidentified reference sets, all pT, no pT bins: one number per class),
+  - FMD1,2-FMD3 (two unidentified reference sets, all pT, no pT bins, no species dependence),
   - only pairs with 1.1 < |Delta-eta| < 6.4 are kept.
 
 ## What the post-processing does
@@ -79,16 +80,15 @@ Settings at the top of `run_ALICE.sh`:
 - `TOTAL`: total number of events.
 - `NCORES`: number of parallel tasks.
 
-Note: a new run writes into the output folder and removes the old task output there. To keep earlier results, copy or rename the folder first, and never merge files made with different pT binnings or different settings.
+Note: a new run writes into the output folder and removes the old task output there. To keep earlier results, copy or rename the folder first.
 
 ### 3. Run the post-processing by hand
 
 Compile (first time, or after editing the programs):
 
+In the main folder run
 ```
-g++ -O2 -o post/analyser_ALICE post/analyser_ALICE.cc `root-config --cflags --libs`
-g++ -O2 -o post/post_ALICE     post/post_ALICE.cc     `root-config --cflags --libs`
-g++ -O2 -o post/plot_ALICE     post/plot_ALICE.cc     `root-config --cflags --libs`
+make 
 ```
 
 Run from the project root, no arguments needed:
@@ -105,12 +105,6 @@ Files and folders used (set as constants at the top of the programs):
 - `plot_ALICE` reads `data/data_ALICE/v2_results_<class>.root` and writes into `plots/plot_ALICE_<class>/` (the folder is created if missing).
 - The class list (HM, HM35) is defined in both `post_ALICE.cc` and `plot_ALICE.cc`; add a class in both.
 
-The analyser is still run on its own:
-
-```
-./post/analyser_ALICE data/data_ALICE/merged.root
-```
-
 ### 4. Monitoring a run
 
 - Progress files: `logs/log_ALICE/progress_task<seed>.txt` (one number per task: events done).
@@ -119,8 +113,6 @@ The analyser is still run on its own:
 ### 5. How to read the results
 
 - The main result is V2Delta per species and pT bin, for TPC-FMD1,2 and TPC-FMD3, plus the single V2Delta(FMD1,2-FMD3) per class.
-- v2 from 3x2PC is only meaningful where both TPC V2Delta values have the same sign as the reference. A negative v2^2 means the combination failed (statistical noise or factorisation breaking), not negative flow. A positive v2 from two negative V2Delta is not flow either.
-- When the reference is consistent with zero, or the TPC V2Delta have the opposite sign, report V2Delta per species with errors instead of v2.
 
 ### 6. Things to keep in mind
 
