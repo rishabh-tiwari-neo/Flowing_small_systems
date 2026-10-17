@@ -1,5 +1,3 @@
-# V2delta: long-range correlations and flow signatures in small systems
-
 Welcome! This repository studies long-range correlations and flow signatures in small systems (pp collisions at 13 TeV) using PYTHIA8 with string shoving and rope hadronisation. It follows the analysis strategy of the ALICE papers on ultra-long-range correlations and partonic flow.
 
 ## Layout
