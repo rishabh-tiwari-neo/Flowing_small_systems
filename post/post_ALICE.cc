@@ -1,5 +1,8 @@
 // post_ALICE.cc
-// weighted linear least-squares fitting with analytical covariance-based error estimation.
+// Builds per-trigger yields Y(dphi) = S/B projected over deta, then fits them with the template.
+// S and B are 2D (dphi x deta) histograms from gen_ALICE. B is normalised with one constant:
+// its dphi average at the deta bin where B is largest. S is divided by the number of triggers.
+// Weighted linear least-squares fitting with analytical covariance-based error estimation.
 // The LM template is treated as exact, so its error is not in the V2Δ uncertainty.
 
 #include <iostream>
@@ -9,8 +12,10 @@
 #include <cmath>
 #include <cstdio>
 #include <algorithm>
+#include <memory>
 #include "TFile.h"
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TGraphErrors.h"
 #include "TString.h"
 
@@ -58,17 +63,16 @@ static bool invert4(const double a[4][4], double out[4][4]) {
 static FitResult templateFit(const TH1D* hs, const TH1D* ht) {
     FitResult res;
     if (!hs || !ht) return res;
-    const double is = hs->Integral(), it = ht->Integral();
-    if (is <= 0 || it <= 0) return res;
+    if (hs->Integral() <= 0 || ht->Integral() <= 0) return res;
 
-    // both histograms normalised to unit area 
+    // inputs are already per-trigger yields, so no further normalisation
     std::vector<double> y, e, t, ph;
     for (int i = 1; i <= hs->GetNbinsX(); ++i) {
-        const double err = hs->GetBinError(i) / is;
+        const double err = hs->GetBinError(i);
         if (err <= 0) continue;
-        y.push_back(hs->GetBinContent(i) / is);
+        y.push_back(hs->GetBinContent(i));
         e.push_back(err);
-        t.push_back(ht->GetBinContent(i) / it);
+        t.push_back(ht->GetBinContent(i));
         ph.push_back(hs->GetBinCenter(i));
     }
     const int npts = (int)y.size();
@@ -122,6 +126,53 @@ static TH1D* getH(TFile* f, const TString& name) {
     return h;
 }
 
+static TH2D* getH2(TFile* f, const TString& name) {
+    TH2D* h = dynamic_cast<TH2D*>(f->Get(name));
+    if (!h) std::cerr << "WARNING: missing histogram " << name << std::endl;
+    return h;
+}
+
+// Per-trigger yield: (S / (B/c)) summed over deta, divided by ntrig.
+// c = dphi average of B at the deta bin where B is largest.
+static std::unique_ptr<TH1D> yieldDphi(TFile* f, const TString& nameS, const TString& nameB, double ntrig) {
+    TH2D* hS = getH2(f, nameS);
+    TH2D* hB = getH2(f, nameB);
+    if (!hS || !hB || ntrig <= 0) return nullptr;
+    const int nx = hS->GetNbinsX(), ny = hS->GetNbinsY();
+
+    double c = 0;
+    for (int iy = 1; iy <= ny; ++iy) {
+        double s = 0;
+        for (int ix = 1; ix <= nx; ++ix) s += hB->GetBinContent(ix, iy);
+        s /= nx;
+        if (s > c) c = s;
+    }
+    if (c <= 0) return nullptr;
+
+    std::unique_ptr<TH1D> h(new TH1D(Form("y_%s", nameS.Data()), "", nx,
+                                     hS->GetXaxis()->GetXmin(), hS->GetXaxis()->GetXmax()));
+    for (int ix = 1; ix <= nx; ++ix) {
+        double val = 0, var = 0;
+        for (int iy = 1; iy <= ny; ++iy) {
+            const double b = hB->GetBinContent(ix, iy);
+            if (b <= 0) continue;
+            const double s = hS->GetBinContent(ix, iy);
+            const double k = c / b;
+            const double eS = hS->GetBinError(ix, iy), eB = hB->GetBinError(ix, iy);
+            val += s * k;
+            var += (eS * k) * (eS * k) + (s * c * eB / (b * b)) * (s * c * eB / (b * b));
+        }
+        h->SetBinContent(ix, val / ntrig);
+        h->SetBinError(ix, std::sqrt(var) / ntrig);
+    }
+    return h;
+}
+
+static double count1(TFile* f, const TString& name) {
+    TH1D* h = getH(f, name);
+    return h ? h->GetBinContent(1) : 0.0;
+}
+
 static std::string num(double v, bool ok) {
     if (!ok) return "nan";
     char b[32];
@@ -139,11 +190,14 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
     TFile* fout = new TFile((outBase + ".root").c_str(), "RECREATE");
     std::ofstream csv(outBase + ".csv");
     csv << "species,pt_low,pt_high,V2D_TPC_FMD12,err,chi2ndf,V2D_TPC_FMD3,err,chi2ndf,"
-           "V2D_FMD12_FMD3,err,chi2ndf,v2sq,err,v2,err\n";
+           "V2D_FMD12_FMD3,err,chi2ndf,v2sq,err\n";
 
     // ---- reference: FMD12 - FMD3 (one number, no pT dependence) -----
-    const FitResult fc = templateFit(getH(fin, Form("hCorr_%s_FMD12_FMD3", cls.c_str())),
-                                     getH(fin, "hCorr_LM_FMD12_FMD3"));
+    const double nFF   = count1(fin, Form("hNassoc_%s_FMD12", cls.c_str()));   // FMD1,2 particles = triggers
+    const double nFFlm = count1(fin, "hNassoc_LM_FMD12");
+    const FitResult fc = templateFit(
+        yieldDphi(fin, Form("hCorr_%s_FMD12_FMD3", cls.c_str()), Form("hMix_%s_FMD12_FMD3", cls.c_str()), nFF).get(),
+        yieldDphi(fin, "hCorr_LM_FMD12_FMD3", "hMix_LM_FMD12_FMD3", nFFlm).get());
     std::cout << "Class " << cls << ", template LM\n";
     if (fc.ok)
         std::printf("V2D(FMD12-FMD3) = %.4e +- %.4e   chi2/ndf = %.2f\n", fc.V2, fc.err, fc.chi2ndf);
@@ -160,59 +214,62 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
         const char* sp = SP_NAME[s];
         TH1D* hN = getH(fin, Form("hNtrig_%s_%s", cls.c_str(), sp));
         if (!hN) continue;
+        TH1D* hNlm = getH(fin, Form("hNtrig_LM_%s", sp));
+        if (!hNlm) continue;
         const int nb = hN->GetNbinsX();
 
         TGraphErrors* gA = new TGraphErrors(); gA->SetName(Form("V2D_TPC_FMD12_%s", sp));
         TGraphErrors* gB = new TGraphErrors(); gB->SetName(Form("V2D_TPC_FMD3_%s",  sp));
         TGraphErrors* gS = new TGraphErrors(); gS->SetName(Form("v2sq_%s", sp));
-        TGraphErrors* gV = new TGraphErrors(); gV->SetName(Form("v2_%s",   sp));
 
         std::printf("\n== %s ==\n", sp);
-        std::printf("%-11s %-24s %-24s %-24s\n", "pT", "V2D TPC-FMD12", "V2D TPC-FMD3", "v2");
+        std::printf("%-11s %-24s %-24s %-24s\n", "pT", "V2D TPC-FMD12", "V2D TPC-FMD3", "v2sq");
 
         for (int b = 0; b < nb; ++b) {
             const double lo = hN->GetBinLowEdge(b + 1);
             const double hi = lo + hN->GetBinWidth(b + 1);
             const double x  = 0.5 * (lo + hi), ex = 0.5 * (hi - lo);
 
+            const double nT   = hN->GetBinContent(b + 1);
+            const double nTlm = hNlm->GetBinContent(b + 1);
             const FitResult fa = templateFit(
-                getH(fin, Form("hCorr_%s_TPC_FMD12_%s_pt%d", cls.c_str(), sp, b)),
-                getH(fin, Form("hCorr_LM_TPC_FMD12_%s_pt%d", sp, b)));
+                yieldDphi(fin, Form("hCorr_%s_TPC_FMD12_%s_pt%d", cls.c_str(), sp, b),
+                               Form("hMix_%s_TPC_FMD12_%s_pt%d",  cls.c_str(), sp, b), nT).get(),
+                yieldDphi(fin, Form("hCorr_LM_TPC_FMD12_%s_pt%d", sp, b),
+                               Form("hMix_LM_TPC_FMD12_%s_pt%d",  sp, b), nTlm).get());
             const FitResult fb = templateFit(
-                getH(fin, Form("hCorr_%s_TPC_FMD3_%s_pt%d", cls.c_str(), sp, b)),
-                getH(fin, Form("hCorr_LM_TPC_FMD3_%s_pt%d", sp, b)));
+                yieldDphi(fin, Form("hCorr_%s_TPC_FMD3_%s_pt%d", cls.c_str(), sp, b),
+                               Form("hMix_%s_TPC_FMD3_%s_pt%d",  cls.c_str(), sp, b), nT).get(),
+                yieldDphi(fin, Form("hCorr_LM_TPC_FMD3_%s_pt%d", sp, b),
+                               Form("hMix_LM_TPC_FMD3_%s_pt%d",  sp, b), nTlm).get());
 
             if (fa.ok) { int n = gA->GetN(); gA->SetPoint(n, x, fa.V2); gA->SetPointError(n, ex, fa.err); }
             if (fb.ok) { int n = gB->GetN(); gB->SetPoint(n, x, fb.V2); gB->SetPointError(n, ex, fb.err); }
 
-            // signed v2^2 = Va*Vb/Vc ; v2 = sign*sqrt(|v2^2|)
+            // signed v2^2 = Va*Vb/Vc (no square root taken)
             bool   okC = fa.ok && fb.ok && fc.ok && fa.V2 != 0 && fb.V2 != 0 && fc.V2 != 0;
-            double v2sq = 0, ev2sq = 0, v2 = 0, ev2 = 0;
+            double v2sq = 0, ev2sq = 0;
             if (okC) {
                 v2sq = fa.V2 * fb.V2 / fc.V2;
                 const double ra = fa.err / fa.V2, rb = fb.err / fb.V2, rc = fc.err / fc.V2;
                 const double rel = std::sqrt(ra * ra + rb * rb + rc * rc);
                 ev2sq = std::fabs(v2sq) * rel;
-                v2    = (v2sq >= 0 ? 1.0 : -1.0) * std::sqrt(std::fabs(v2sq));
-                ev2   = 0.5 * std::fabs(v2) * rel;
                 int n = gS->GetN(); gS->SetPoint(n, x, v2sq); gS->SetPointError(n, ex, ev2sq);
-                n = gV->GetN();     gV->SetPoint(n, x, v2);   gV->SetPointError(n, ex, ev2);
             }
 
             std::printf("%4.2f-%-5.2f  %s  %s  %s\n", lo, hi,
                         fa.ok ? Form("%+.3e +- %.2e", fa.V2, fa.err) : "fit failed             ",
                         fb.ok ? Form("%+.3e +- %.2e", fb.V2, fb.err) : "fit failed             ",
-                        okC   ? Form("%+.3e +- %.2e", v2, ev2)       : "undefined              ");
+                        okC   ? Form("%+.3e +- %.2e", v2sq, ev2sq)   : "undefined              ");
 
             csv << sp << "," << lo << "," << hi << ","
                 << num(fa.V2, fa.ok) << "," << num(fa.err, fa.ok) << "," << num(fa.chi2ndf, fa.ok) << ","
                 << num(fb.V2, fb.ok) << "," << num(fb.err, fb.ok) << "," << num(fb.chi2ndf, fb.ok) << ","
                 << num(fc.V2, fc.ok) << "," << num(fc.err, fc.ok) << "," << num(fc.chi2ndf, fc.ok) << ","
-                << num(v2sq, okC) << "," << num(ev2sq, okC) << ","
-                << num(v2, okC)   << "," << num(ev2, okC) << "\n";
+                << num(v2sq, okC) << "," << num(ev2sq, okC) << "\n";
         }
 
-        gA->Write(); gB->Write(); gS->Write(); gV->Write();
+        gA->Write(); gB->Write(); gS->Write();
     }
 
     csv.close();
@@ -223,6 +280,7 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
 }
 
 int main() {
+    TH1::AddDirectory(kFALSE);   // temporary yield histograms stay out of the ROOT directory
     int failed = 0;
     for (const std::string& cls : CLASSES)
         if (runClass(std::string(DATA_DIR) + "/merged.root",

@@ -1,5 +1,5 @@
 // plot_ALICE.cc
-// Makes v2_vs_pt, v2sq_vs_pt, V2D_TPC_FMD12, V2D_TPC_FMD3 and V2D_FMD12_FMD3.
+// Makes v2sq_vs_pt, V2D_TPC_FMD12, V2D_TPC_FMD3 and V2D_FMD12_FMD3.
 
 #include <iostream>
 #include <string>
@@ -40,7 +40,7 @@ static void setMargins() {
     gPad->SetRightMargin(0.04);
 }
 
-// Draws all species of one kind (prefix = v2, v2sq, V2D_TPC_FMD12, V2D_TPC_FMD3)
+// Draws all species of one kind (prefix = v2sq, V2D_TPC_FMD12, V2D_TPC_FMD3)
 
 static void drawPad(TFile* f, const char* prefix, const char* ytitle, double clamp)
 {
@@ -160,12 +160,6 @@ static bool plotClass(const std::string& cls) {
         return false;
     }
     gSystem->mkdir(outdir.c_str(), true);       // creates the folder (and parents) if missing
-
-    // v2 vs pT
-    TCanvas* c1 = new TCanvas(Form("c_v2_%s", cls.c_str()), "v2", 800, 600);
-    c1->cd();
-    drawPad(f, "v2", "#sqrt{|v_{2}^{2}|}", 1.0);;
-    save(c1, outdir, "v2_vs_pt");
 
     // v2^2 vs pT
     TCanvas* c2 = new TCanvas(Form("c_v2sq_%s", cls.c_str()), "v2sq", 800, 600);
