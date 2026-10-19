@@ -2,7 +2,7 @@
 // Proton statistics in HM events: counts per pT bin, equal-statistics edges,
 // and a rough estimate of the pair statistics available for V2Delta.
 void proton_stats() {
-    TFile *f = TFile::Open("merged.root");
+    TFile *f = TFile::Open("stat_ALICE.root");
     TTree *t = (TTree*)f->Get("events");
 
     // V0M threshold, top 0.07% of registered events (same as the analyser)

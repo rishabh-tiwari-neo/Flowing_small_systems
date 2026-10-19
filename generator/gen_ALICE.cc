@@ -50,7 +50,7 @@ inline int ptBin(double pt) {
     return int(std::upper_bound(PT_EDGES, PT_EDGES + NpT_bins + 1, pt) - PT_EDGES) - 1;
 }
 
-//Event classifier block (EC)
+// Event classifier block (EC)
 // ---- event classes  ----
 enum EvClass { HM = 0, LM = 1, HM35 = 2, NCLS = 3 };// NCLS = number of classes
 static const char* CLS_NAME[NCLS] = {"HM", "LM", "HM35"};
