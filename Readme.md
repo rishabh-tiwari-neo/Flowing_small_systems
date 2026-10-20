@@ -29,7 +29,7 @@ main/
   - central charged multiplicity `nchCent` (|eta| < 0.8, 0.2 < pT < 3 GeV/c),
   - charged particles in the V0A and V0C windows (MB trigger and V0M estimator),
   - charged particles in FMD1,2 (1.7 < eta < 5.1) and FMD3 (-3.1 < eta < -1.7), used as reference particles (all pT, no PID).
-- Identified triggers: pi, K, p (|eta| < 0.8) and K0S, Lambda (|y| < 0.5), in 20 pT bins with edges
+- Identified triggers: pi, K, p (|eta| < 0.8) and K0S, Lambda (|y| < 0.5 and, at the same time, |eta| < 0.8), in 20 pT bins with edges
   0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0, 5.5, 6.0, 10.0 GeV/c.
 - Event classes (an event can be in more than one):
   - HM: V0M > 157 and nchCent > 25 (about the top 0.07% of events)
@@ -44,12 +44,14 @@ main/
   - the triggers (and FMD1,2 particles) of the current event are paired with the references of every pooled event, then the current event is added to the pool, so an event is never mixed with itself,
   - events are only mixed within the same class, which is the multiplicity-class matching used by ALICE. There is a single primary vertex in PYTHIA, so no vertex binning is needed.
 - Normalisation counts are stored too: identified triggers per pT bin (`hNtrig`) and the number of FMD1,2 and FMD3 particles (`hNassoc`).
+- Generator info: every run writes `generator_info.txt` into the data folder (next to the output files) with the PYTHIA version and the shoving strength g (`Ropewalk:gAmplitude`), read back from the PYTHIA settings that were used.
 
 ## What the post-processing does
 
 - `analyser_ALICE`: prints event counts, class fractions (HM, LM, HM35), mean multiplicities per class, trigger yields, and same-event and mixed-event pair counts of a merged `gen_ALICE` file. The pT bins are read from the file.
 - `post_ALICE`: for each class (HM, HM35), pairing, species and pT bin, builds the per-trigger yield Y(Delta-phi) = S/B (see Methodology), fits it with the LM template (template fit: weighted linear least squares, errors from the fit covariance matrix), and extracts V2Delta. The three pairings are then combined (3x2PC):
   - v2^2 = V2D(TPC-FMD1,2) x V2D(TPC-FMD3) / V2D(FMD1,2-FMD3), keeping the sign. No square root is taken, since v2^2 can come out negative when the combination fails.
+  K0S and Lambda are sparse, so for them the pT bins are merged before the S/B division: the 2D S and B histograms and the trigger counts of the generator bins are summed, giving the bins 0.5-0.8, 0.8-1.25, 1.25-1.75, 1.75-2.25, 2.25-2.75, 2.75-3.25, 3.25-4.0, 4.0-5.0, 5.0-6.0, 6.0-10 GeV/c (table `ptGroups` in `post_ALICE.cc`). pi, K and p keep the 20 generator bins.
   Output per class: a ROOT file and a CSV file.
 - `plot_ALICE`: for each class makes four plots (PDF and PNG): v2^2 vs pT, V2Delta(TPC-FMD1,2) vs pT, V2Delta(TPC-FMD3) vs pT, and the single V2Delta(FMD1,2-FMD3) point.
 
@@ -61,7 +63,8 @@ This follows the ALICE papers (arXiv:2504.02359 and the Nature Commun. partonic-
 2. **Per-trigger yield.** S is divided by the number of triggers: identified particles in the pT bin for TPC pairings, FMD1,2 particles for FMD1,2-FMD3. S/B is summed over Delta-eta (1.1 to 6.4) to give Y(Delta-phi), with B's statistical error included. No unit-area normalisation is applied.
 3. **Template fit.** Y_HM(Delta-phi) = F x Y_LM(Delta-phi) + G x [1 + 2 V2D cos(2 Delta-phi) + 2 V3D cos(3 Delta-phi)], with F and G free. The LM class (nchCent < 20) is processed with the same S/B steps and acts as the non-flow template. V2Delta comes from a2/(2G); the error from the covariance of the linear least-squares fit.
 4. **Three-subevent combination (3x2PC).** v2^2 = V2D(TPC-FMD1,2) x V2D(TPC-FMD3) / V2D(FMD1,2-FMD3).
-5. **Selection differences from ALICE.** HM is the top 0.07% of V0M with nchCent > 25 (mean nchCent about 54 here, against about 35 in ALICE). HM35 relaxes V0M so the mean is about 35; it is a different selection from ALICE's 0.07%. The Delta-eta window is 1.1 to 6.4, wider than the paper's 5.0 to 6.0 for the FMD pair.
+5. **pT merging for K0S and Lambda.** S and B are summed over the merged generator pT bins (with the trigger counts) before the division, for the HM class and for the LM template alike.
+6. **Selection differences from ALICE.** HM is the top 0.07% of V0M with nchCent > 25 (mean nchCent about 54 here, against about 35 in ALICE). HM35 relaxes V0M so the mean is about 35; it is a different selection from ALICE's 0.07%. The Delta-eta window is 1.1 to 6.4, wider than the paper's 5.0 to 6.0 for the FMD pair.
 
 ## User manual
 
@@ -134,8 +137,16 @@ Files and folders used (set as constants at the top of the programs):
 - Record the PYTHIA version used for each run (the build prints it). Results from different versions (for example 8.312, 8.316, 8.317) can differ slightly even with the same seeds.
 - Output files from before the mixed-event step (1D Delta-phi histograms) are not compatible with the current `post_ALICE`, and old and new files cannot be merged.
 - The mixed-event step multiplies the pairing work by roughly the pool depth. Check the run time on a small run first.
-- Errors are statistical only (from the fit covariance). They treat the LM template as exact and the pairs as independent, so they are somewhat too small (typical chi2/ndf is about 1.3 to 1.6 for the species fits). There are no systematic uncertainties yet.
+- Errors are statistical only (from the fit covariance). They treat the LM template as exact and the pairs as independent, so they are somewhat too small (chi2/ndf of the fits is typically about 1.2 to 2.2). There are no systematic uncertainties yet.
 - The cosines in the fit are evaluated at the Delta-phi bin centres, which biases V2 low by about 1.6%.
-- The shoving strength g is set inside `gen_ALICE.cc` (`Ropewalk:gAmplitude`) and is not yet stored in the output file. Keep different g values in different folders and note the value in your log.
+- The shoving strength g is set inside `gen_ALICE.cc` (`Ropewalk:gAmplitude`) and is written, with the PYTHIA version, to `generator_info.txt` in the data folder. Keep different g values in different folders anyway.
+- Files generated with and without the K0S/Lambda |eta| < 0.8 cut (it changes the Lambda 0.5-0.6 GeV/c bin) must not be merged.
 - Histogram names must stay identical in `gen_ALICE.cc` and `post_ALICE.cc`; species names must also match in `plot_ALICE.cc`.
 - Fits fail (printed as "fit failed") when a bin has too few pairs. This is expected in small test runs, especially for HM at high pT.
+
+## Known behaviour of the results (250M events, S/B)
+
+- Reference: V2D(FMD1,2-FMD3) = 2.52e-4 +- 8.6e-6 for HM35 (chi2/ndf 1.20) and 1.5e-4 +- 5.0e-5 for HM (1.46).
+- Pions in HM35 have a negative V2Delta above about 0.8 GeV/c. It comes almost entirely from the Delta-eta 1.1-2.0 slice (short-range non-flow next to the Delta-eta cut) where the template fit also has a poor chi2/ndf; the other Delta-eta slices are close to zero. The resulting v2^2 is positive only because both TPC V2Delta values are negative, so it is not a flow signal.
+- K0S and Lambda have few triggers at high pT. In S/B the B cells with few counts get a large weight (c/B) and give large and irregular errors. Merging the pT bins fixed this for Lambda; for K0S the values at 3.25-5 GeV/c are still dominated by noise and should not be read.
+- v2^2 plots: the large error bars of the noisy K0S and Lambda points stretch the y-axis.

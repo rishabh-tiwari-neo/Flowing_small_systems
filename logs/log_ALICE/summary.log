@@ -1,34 +1,34 @@
 === Run Summary ===
-Date: Mon Oct 19 03:23:04 PM IST 2026
+Date: Tue Oct 20 01:33:29 PM IST 2026
 Total events requested: 10000
 Cores used: 4
-Total wall-clock runtime: 15s
+Total wall-clock runtime: 17s
 
 --- Seeds used ---
-Seeds for this run (Mon Oct 19 03:22:48 PM IST 2026):
-task 0 -> seed 168782525
-task 1 -> seed 257815806
-task 2 -> seed 384493484
-task 3 -> seed 150443132
+Seeds for this run (Tue Oct 20 01:33:11 PM IST 2026):
+task 0 -> seed 58838147
+task 1 -> seed 27602617
+task 2 -> seed 10460343
+task 3 -> seed 39128078
 
 --- Per-task details ---
 [task 0]
-[task 0] started Mon Oct 19 03:22:48 PM IST 2026, seed=168782525, events=2500
-[seed 168782525] Done. Wrote data/data_ALICE/output_task0.root (events=2500, HM=1.000, LM=1917.000, HM35=327.000)
-[task 0] finished Mon Oct 19 03:23:03 PM IST 2026, runtime=15s
+[task 0] started Tue Oct 20 01:33:11 PM IST 2026, seed=58838147, events=2500
+[seed 58838147] Done. Wrote data/data_ALICE/output_task0.root (events=2500, HM=0.000, LM=1948.000, HM35=309.000)
+[task 0] finished Tue Oct 20 01:33:26 PM IST 2026, runtime=15s
 
 [task 1]
-[task 1] started Mon Oct 19 03:22:48 PM IST 2026, seed=257815806, events=2500
-[seed 257815806] Done. Wrote data/data_ALICE/output_task1.root (events=2500, HM=1.000, LM=1919.000, HM35=308.000)
-[task 1] finished Mon Oct 19 03:23:03 PM IST 2026, runtime=15s
+[task 1] started Tue Oct 20 01:33:11 PM IST 2026, seed=27602617, events=2500
+[seed 27602617] Done. Wrote data/data_ALICE/output_task1.root (events=2500, HM=1.000, LM=1894.000, HM35=348.000)
+[task 1] finished Tue Oct 20 01:33:27 PM IST 2026, runtime=16s
 
 [task 2]
-[task 2] started Mon Oct 19 03:22:48 PM IST 2026, seed=384493484, events=2500
-[seed 384493484] Done. Wrote data/data_ALICE/output_task2.root (events=2500, HM=3.000, LM=1919.000, HM35=309.000)
-[task 2] finished Mon Oct 19 03:23:02 PM IST 2026, runtime=14s
+[task 2] started Tue Oct 20 01:33:11 PM IST 2026, seed=10460343, events=2500
+[seed 10460343] Done. Wrote data/data_ALICE/output_task2.root (events=2500, HM=4.000, LM=1925.000, HM35=341.000)
+[task 2] finished Tue Oct 20 01:33:27 PM IST 2026, runtime=16s
 
 [task 3]
-[task 3] started Mon Oct 19 03:22:48 PM IST 2026, seed=150443132, events=2500
-[seed 150443132] Done. Wrote data/data_ALICE/output_task3.root (events=2500, HM=1.000, LM=1908.000, HM35=340.000)
-[task 3] finished Mon Oct 19 03:23:03 PM IST 2026, runtime=15s
+[task 3] started Tue Oct 20 01:33:11 PM IST 2026, seed=39128078, events=2500
+[seed 39128078] Done. Wrote data/data_ALICE/output_task3.root (events=2500, HM=2.000, LM=1893.000, HM35=349.000)
+[task 3] finished Tue Oct 20 01:33:27 PM IST 2026, runtime=16s
 

@@ -4,6 +4,8 @@ TOTAL=10000
 
 NCORES=4
 
+g=10               # Ropewalk:gAmplitude (shoving strength), passed to the generator and stored in merged.root
+
 GEN_BIN="generator/gen_ALICE"
 DATA_DIR="data/data_ALICE"
 LOG_DIR="logs/log_ALICE"      # must match progFile in gen_ALICE.cc
@@ -57,7 +59,7 @@ for ((i=0; i<NCORES; i++)); do
     (
         TSTART=$(date +%s)
         echo "[task $i] started $(date), seed=$SEED, events=$N"
-        ./$GEN_BIN $N $SEED $OUT
+        ./$GEN_BIN $N $SEED $OUT $g
         TEND=$(date +%s)
         echo "[task $i] finished $(date), runtime=$((TEND - TSTART))s"
     ) > "$LOG_DIR/task${i}.log" 2>&1 &
@@ -118,6 +120,23 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "Merged file: $MERGED"
+
+# store g in the merged file (read by plot_ALICE)
+cat > "$LOG_DIR/add_g.C" <<MACRO
+#include "TFile.h"
+#include "TParameter.h"
+void add_g(const char* fname, double g) {
+    TFile f(fname, "UPDATE");
+    TParameter<double> p("g", g);
+    p.Write();
+    f.Close();
+}
+MACRO
+root -l -b -q "$LOG_DIR/add_g.C(\"$MERGED\", $g)"
+if [ $? -ne 0 ]; then
+    echo "Could not store g in $MERGED. Aborting."
+    exit 1
+fi
 
 # --- write summary log ---
 {

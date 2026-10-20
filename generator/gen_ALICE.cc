@@ -37,7 +37,7 @@ static const int NCH_LM_MAX   = 20;    // LM: nchCent < 20
 
 // ---- identified-particle acceptance ----
 static const double PID_ETA_MAX = 0.8;   // pi, K, p: |eta| < 0.8
-static const double V0_Y_MAX    = 0.5;   // K0S, Lambda: |y| < 0.5
+static const double V0_Y_MAX    = 0.5;   // K0S, Lambda: |y| < 0.5 and, simultaneously, |eta| < PID_ETA_MAX
 
 // ---- common pT binning for all species ----
 static const int    NpT_bins = 20;
@@ -83,8 +83,8 @@ inline int speciesOf(int absId) {
 }
 
 // ---- pairings ----
-// TPC_FMD12  : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 for k0s and Lambda) with a charged particle in FMD1,2
-// TPC_FMD3   : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 for k0s and Lambda) with a charged particle in FMD3
+// TPC_FMD12  : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 and |eta|<0.8 for k0s and Lambda) with a charged particle in FMD1,2
+// TPC_FMD3   : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 and |eta|<0.8 for k0s and Lambda) with a charged particle in FMD3
 // FMD12_FMD3 : charged particle in FMD1,2 with one in FMD3 (no PID, no pT bins)
 // only the first two are used for the identified-particle histograms (NIDPAIR)
 enum Pairing { TPC_FMD12 = 0, TPC_FMD3 = 1, FMD12_FMD3 = 2, NPAIR = 3 };
@@ -120,15 +120,16 @@ struct PooledEvent { std::vector<Ref> f12, f3; };
 
 int main(int argc, char* argv[]) {
 
-    if (argc != 4) {
+    if (argc != 5) {
         std::cerr << "Usage: " << argv[0]
-                  << " <n_events> <seed> <output_file>" << std::endl;
+                  << " <n_events> <seed> <output_file> <g>" << std::endl;
         return 1;
     }
 
     long n_events        = std::atol(argv[1]);
     int  seed            = std::atoi(argv[2]);
     std::string outFile  = argv[3];
+    double gShove        = std::atof(argv[4]);   // shoving strength, set in run_ALICE.sh
     std::string progFile = "logs/log_ALICE/progress_task" + std::to_string(seed) + ".txt"; // Progress monitoring and receiving event deatils
 
     Pythia8::Pythia pythia;
@@ -143,7 +144,7 @@ int main(int argc, char* argv[]) {
 
     pythia.readString("Ropewalk:RopeHadronization = on");
     pythia.readString("Ropewalk:doShoving = on");
-    pythia.readString("Ropewalk:gAmplitude = 10");   // change per run: 3 / 10 / 40
+    pythia.readString("Ropewalk:gAmplitude = " + std::to_string(gShove));   // from run_ALICE.sh
     pythia.readString("Ropewalk:r0 = 0.41");
     pythia.readString("Ropewalk:rCutOff = 10");
     pythia.readString("Ropewalk:deltay = 0.10");
@@ -156,6 +157,16 @@ int main(int argc, char* argv[]) {
     pythia.readString("Random:seed = " + std::to_string(seed));
 
     pythia.init();
+
+    // generator_info.txt next to the output file: PYTHIA version and shoving strength g actually used
+    // (all tasks write the same text, so the last writer wins without harm)
+    {
+        const size_t slash = outFile.find_last_of('/');
+        const std::string dir = (slash == std::string::npos) ? "." : outFile.substr(0, slash);
+        std::ofstream info(dir + "/generator_info.txt", std::ios::trunc);
+        info << "PYTHIA version: " << pythia.settings.parm("Pythia:versionNumber") << "\n"
+             << "Ropewalk:gAmplitude (g): " << pythia.settings.parm("Ropewalk:gAmplitude") << "\n";
+    }
 
     // Histograms and counters
     // identified-trigger correlations, same event (S) and mixed event (B): [class][species][pT bin][TPC_FMD12 / TPC_FMD3]
@@ -247,7 +258,7 @@ int main(int argc, char* argv[]) {
             const int sp = speciesOf(std::abs(p.id()));
             if (sp < 0) continue;
             const bool isV0  = (sp == K0S || sp == LAM);
-            const bool inAcc = isV0 ? (std::fabs(p.y()) < V0_Y_MAX)
+            const bool inAcc = isV0 ? (std::fabs(p.y()) < V0_Y_MAX && std::fabs(eta) < PID_ETA_MAX)
                                     : (std::fabs(eta)   < PID_ETA_MAX);
             const int pb = ptBin(pt);
             if (inAcc && pb >= 0) trig.push_back({eta, phi, sp, pb});
