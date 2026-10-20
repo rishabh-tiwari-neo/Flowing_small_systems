@@ -1,11 +1,13 @@
 // post_ALICE.cc
 // Builds per-trigger yields Y(dphi) = S/B projected over deta, then fits them with the template.
 // S and B are 2D (dphi x deta) histograms from gen_ALICE. B is normalised with one constant:
-// its dphi average at the deta bin where B is largest. S is divided by the number of triggers.
+// its dphi average at the deta bin where B is largest. S is divided by the number of triggers
+// (for FMD1,2-FMD3: the number of FMD1,2 particles).
 // Weighted linear least-squares fitting with analytical covariance-based error estimation.
 // The LM template is treated as exact, so its error is not in the V2Δ uncertainty.
 // Sparse species (K0S, Lambda) are analysed in coarser pT bins: the 2D S and B histograms of
 // several generator pT bins are summed before dividing (see ptGroups).
+// The three V2Δ (TPC-FMD1,2, TPC-FMD3, FMD1,2-FMD3) are combined into v2^2 (3x2PC). 
 
 #include <iostream>
 #include <fstream>
@@ -13,7 +15,7 @@
 #include <string>
 #include <cmath>
 #include <cstdio>
-#include <algorithm>
+#include <utility>
 #include <memory>
 #include "TFile.h"
 #include "TH1D.h"
