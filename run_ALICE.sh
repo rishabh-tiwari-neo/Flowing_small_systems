@@ -1,14 +1,13 @@
-#!/bin/bash
 # Hardcoded run configuration
 TOTAL=10000
 
 NCORES=4
 
-g=10               # Ropewalk:gAmplitude (shoving strength), passed to the generator and stored in merged.root
+g=10   #gAmplitude
 
 GEN_BIN="generator/gen_ALICE"
 DATA_DIR="data/data_ALICE"
-LOG_DIR="logs/log_ALICE"      # must match progFile in gen_ALICE.cc
+LOG_DIR="logs/log_ALICE"  
 
 echo "Building..."
 rm -f "$GEN_BIN"

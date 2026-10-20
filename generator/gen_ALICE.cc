@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
     pythia.init();
 
     // generator_info.txt next to the output file: PYTHIA version and shoving strength g actually used
-    // (all tasks write the same text, so the last writer wins without harm)
+
     {
         const size_t slash = outFile.find_last_of('/');
         const std::string dir = (slash == std::string::npos) ? "." : outFile.substr(0, slash);
@@ -328,7 +328,8 @@ int main(int argc, char* argv[]) {
                     }
             }
 
-            // add this event to the pool (after pairing, so it is never mixed with itself)
+            // FIFO pool 
+            // pushed after pairing, so mixing starts with the 2nd event of the class and saturates at POOL_DEPTH = n
             pool[c].push_back({f12, f3});
             if ((int)pool[c].size() > POOL_DEPTH) pool[c].pop_front();
         }
