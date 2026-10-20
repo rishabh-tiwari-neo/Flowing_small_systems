@@ -54,40 +54,29 @@ static void setMargins() {
 
 // Draws all species of one kind (prefix = v2sq, V2D_TPC_FMD12, V2D_TPC_FMD3)
 
-static void drawPad(TFile* f, const char* prefix, const char* ytitle, double clamp, double gShove)
+static void drawPad(TFile* f, const char* prefix, const char* ytitle, double ylo, double yhi, double gShove)
 {
     TGraphErrors* g[NSP];
-    double lo = 0, hi = 0, xlo = 0, xhi = 0;
+    double xlo = 0, xhi = 0;
     bool any = false;
 
-    // ---- fetch the graphs and find the data range (lo/hi in y, xhi in x) ----
-    // lo and hi start at 0, so the zero line is always on the plot
+    // ---- fetch the graphs and find the x range ----
     for (int s = 0; s < NSP; ++s) {
         g[s] = dynamic_cast<TGraphErrors*>(f->Get(Form("%s_%s", prefix, SP_NAME[s])));
         if (!g[s] || g[s]->GetN() == 0) { g[s] = nullptr; continue; }   // missing or empty: skip this species
         any = true;
-        for (int i = 0; i < g[s]->GetN(); ++i) {
-            const double y = g[s]->GetY()[i], ey = g[s]->GetErrorY(i);
-            const double x = g[s]->GetX()[i], ex = g[s]->GetErrorX(i);
-            lo  = std::min(lo,  y - ey);
-            hi  = std::max(hi,  y + ey);
-            xhi = std::max(xhi, x + ex);
-        }
+        for (int i = 0; i < g[s]->GetN(); ++i)
+            xhi = std::max(xhi, g[s]->GetX()[i] + g[s]->GetErrorX(i));
     }
     if (!any) { std::cerr << "No graphs found for " << prefix << std::endl; return; }
 
-    // ---- y-axis limits add 10% margin ----
-    if (clamp > 0) { lo = std::max(lo, -clamp); hi = std::min(hi, clamp); }
-    if (hi <= lo) { hi = lo + 1e-3; }
-    const double margin = 0.1 * (hi - lo);
-
     setMargins();
 
-    // ---- empty frame that carries the axes, titles and y range ----
+    // ---- empty frame that carries the axes, titles and y range (set by hand: ylo, yhi) ----
     TH1F* fr = new TH1F(Form("frame%d", frameCounter++), "", 100, xlo, xhi);
     fr->SetStats(0);
-    fr->SetMinimum(lo - margin);
-    fr->SetMaximum(hi + margin);
+    fr->SetMinimum(ylo);
+    fr->SetMaximum(yhi);
     fr->GetXaxis()->SetTitle("p_{T} (GeV/c)");
     fr->GetYaxis()->SetTitle(ytitle);
     fr->GetYaxis()->CenterTitle(true);      // y title in the middle of the axis
@@ -185,19 +174,19 @@ static bool plotClass(const std::string& cls) {
     // v2^2 vs pT
     TCanvas* c2 = new TCanvas(Form("c_v2sq_%s", cls.c_str()), "v2sq", 800, 600);
     c2->cd();
-    drawPad(f, "v2sq", "v_{2}^{2}", 1.0, g);
+    drawPad(f, "v2sq", "v_{2}^{2}", -1.0, 1.0, g);
     save(c2, outdir, "v2sq_vs_pt");
 
     // V2D TPC-FMD1,2 vs pT
     TCanvas* c3 = new TCanvas(Form("c_tpc12_%s", cls.c_str()), "V2D TPC-FMD12", 800, 600);
     c3->cd();
-    drawPad(f, "V2D_TPC_FMD12", "V_{2#Delta} (TPC-FMD1,2)", 0.05, g);
+    drawPad(f, "V2D_TPC_FMD12", "V_{2#Delta} (TPC-FMD1,2)", -0.05, 0.05, g);
     save(c3, outdir, "V2D_TPC_FMD12");
 
     // V2D TPC-FMD3 vs pT
     TCanvas* c4 = new TCanvas(Form("c_tpc3_%s", cls.c_str()), "V2D TPC-FMD3", 800, 600);
     c4->cd();
-    drawPad(f, "V2D_TPC_FMD3", "V_{2#Delta} (TPC-FMD3)", 0.05, g);
+    drawPad(f, "V2D_TPC_FMD3", "V_{2#Delta} (TPC-FMD3)", -0.05, 0.05, g);
     save(c4, outdir, "V2D_TPC_FMD3");
 
     // V2D FMD1,2-FMD3 (single number)
