@@ -1,5 +1,5 @@
 // plot_ALICE.cc
-// Makes v2_vs_pt, v2sq_vs_pt, V2D_TPC_FMD12, V2D_TPC_FMD3 and V2D_FMD12_FMD3.
+// Makes v2sq_vs_pt, V2D_TPC_FMD12, V2D_TPC_FMD3 and V2D_FMD12_FMD3.
 
 #include <iostream>
 #include <string>
@@ -15,6 +15,8 @@
 #include "TLegend.h"
 #include "TLine.h"
 #include "TString.h"
+#include "TParameter.h"
+#include "TLatex.h"
 
 // ---- input / output locations and the classes to plot ----
 static const char* DATA_DIR      = "data/data_ALICE";
@@ -29,6 +31,16 @@ static const char* SP_LABEL[NSP] = {"#pi^{#pm}", "K^{#pm}", "p+#bar{p}",
 static const int   SP_COLOR[NSP] = {kBlue, kAzure, kRed, kCyan, kOrange};
 static const int   SP_MARKER[NSP] = {20, 34, 21, 22, 33};
 
+// reads the shoving strength g stored in merged.root by gen_ALICE; returns -1 if absent (older data)
+static double readG() {
+    TFile* f = TFile::Open((std::string(DATA_DIR) + "/merged.root").c_str(), "READ");
+    if (!f || f->IsZombie()) return -1;
+    TParameter<double>* p = dynamic_cast<TParameter<double>*>(f->Get("g"));
+    const double g = p ? p->GetVal() : -1;
+    f->Close();
+    return g;
+}
+
 // gives every axis frame a unique name
 static int frameCounter = 0;
 
@@ -40,42 +52,31 @@ static void setMargins() {
     gPad->SetRightMargin(0.04);
 }
 
-// Draws all species of one kind (prefix = v2, v2sq, V2D_TPC_FMD12, V2D_TPC_FMD3)
+// Draws all species of one kind (prefix = v2sq, V2D_TPC_FMD12, V2D_TPC_FMD3)
 
-static void drawPad(TFile* f, const char* prefix, const char* ytitle, double clamp)
+static void drawPad(TFile* f, const char* prefix, const char* ytitle, double ylo, double yhi, double gShove)
 {
     TGraphErrors* g[NSP];
-    double lo = 0, hi = 0, xlo = 0, xhi = 0;
+    double xlo = 0, xhi = 0;
     bool any = false;
 
-    // ---- fetch the graphs and find the data range (lo/hi in y, xhi in x) ----
-    // lo and hi start at 0, so the zero line is always on the plot
+    // ---- fetch the graphs and find the x range ----
     for (int s = 0; s < NSP; ++s) {
         g[s] = dynamic_cast<TGraphErrors*>(f->Get(Form("%s_%s", prefix, SP_NAME[s])));
         if (!g[s] || g[s]->GetN() == 0) { g[s] = nullptr; continue; }   // missing or empty: skip this species
         any = true;
-        for (int i = 0; i < g[s]->GetN(); ++i) {
-            const double y = g[s]->GetY()[i], ey = g[s]->GetErrorY(i);
-            const double x = g[s]->GetX()[i], ex = g[s]->GetErrorX(i);
-            lo  = std::min(lo,  y - ey);
-            hi  = std::max(hi,  y + ey);
-            xhi = std::max(xhi, x + ex);
-        }
+        for (int i = 0; i < g[s]->GetN(); ++i)
+            xhi = std::max(xhi, g[s]->GetX()[i] + g[s]->GetErrorX(i));
     }
     if (!any) { std::cerr << "No graphs found for " << prefix << std::endl; return; }
 
-    // ---- y-axis limits add 10% margin ----
-    if (clamp > 0) { lo = std::max(lo, -clamp); hi = std::min(hi, clamp); }
-    if (hi <= lo) { hi = lo + 1e-3; }
-    const double margin = 0.1 * (hi - lo);
-
     setMargins();
 
-    // ---- empty frame that carries the axes, titles and y range ----
+    // ---- empty frame that carries the axes, titles and y range (set by hand: ylo, yhi) ----
     TH1F* fr = new TH1F(Form("frame%d", frameCounter++), "", 100, xlo, xhi);
     fr->SetStats(0);
-    fr->SetMinimum(lo - margin);
-    fr->SetMaximum(hi + margin);
+    fr->SetMinimum(ylo);
+    fr->SetMaximum(yhi);
     fr->GetXaxis()->SetTitle("p_{T} (GeV/c)");
     fr->GetYaxis()->SetTitle(ytitle);
     fr->GetYaxis()->CenterTitle(true);      // y title in the middle of the axis
@@ -88,7 +89,8 @@ static void drawPad(TFile* f, const char* prefix, const char* ytitle, double cla
     zero->Draw();
 
     // ---- draw each species with its own style and add it to the legend ----
-    TLegend* leg = new TLegend(0.84, 0.70, 0.97, 0.92);
+    TLegend* leg = new TLegend(0.84, gShove >= 0 ? 0.64 : 0.70, 0.97, 0.92);
+    if (gShove >= 0) leg->SetHeader(Form("g = %g", gShove));
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
     leg->SetTextSize(0.04);       
@@ -107,7 +109,7 @@ static void drawPad(TFile* f, const char* prefix, const char* ytitle, double cla
 }
 
 // Draws the single FMD1,2-FMD3 point into the current pad.
-static void drawRef(TFile* f) {
+static void drawRef(TFile* f, double g) {
     TGraphErrors* gr = dynamic_cast<TGraphErrors*>(f->Get("V2D_FMD12_FMD3"));
     if (!gr || gr->GetN() == 0) { std::cerr << "No graph found for V2D_FMD12_FMD3" << std::endl; return; }
 
@@ -140,6 +142,13 @@ static void drawRef(TFile* f) {
     gr->SetLineColor(kBlack);
     gr->SetMarkerSize(1.3);
     gr->Draw("PZ SAME");
+
+    if (g >= 0) {
+        TLatex* t = new TLatex(0.20, 0.88, Form("g = %g", g));
+        t->SetNDC();
+        t->SetTextSize(0.04);
+        t->Draw();
+    }
 }
 
 // saves one canvas as PDF and PNG, then deletes it (canvas names stay unique per class)
@@ -159,36 +168,31 @@ static bool plotClass(const std::string& cls) {
         std::cerr << "Cannot open " << inFile << std::endl;
         return false;
     }
+    const double g = readG();
     gSystem->mkdir(outdir.c_str(), true);       // creates the folder (and parents) if missing
-
-    // v2 vs pT
-    TCanvas* c1 = new TCanvas(Form("c_v2_%s", cls.c_str()), "v2", 800, 600);
-    c1->cd();
-    drawPad(f, "v2", "#sqrt{|v_{2}^{2}|}", 1.0);;
-    save(c1, outdir, "v2_vs_pt");
 
     // v2^2 vs pT
     TCanvas* c2 = new TCanvas(Form("c_v2sq_%s", cls.c_str()), "v2sq", 800, 600);
     c2->cd();
-    drawPad(f, "v2sq", "v_{2}^{2}", 1.0);
+    drawPad(f, "v2sq", "v_{2}^{2}", -1.0, 1.0, g);
     save(c2, outdir, "v2sq_vs_pt");
 
     // V2D TPC-FMD1,2 vs pT
     TCanvas* c3 = new TCanvas(Form("c_tpc12_%s", cls.c_str()), "V2D TPC-FMD12", 800, 600);
     c3->cd();
-    drawPad(f, "V2D_TPC_FMD12", "V_{2#Delta} (TPC-FMD1,2)", 0.05);
+    drawPad(f, "V2D_TPC_FMD12", "V_{2#Delta} (TPC-FMD1,2)", -0.05, 0.05, g);
     save(c3, outdir, "V2D_TPC_FMD12");
 
     // V2D TPC-FMD3 vs pT
     TCanvas* c4 = new TCanvas(Form("c_tpc3_%s", cls.c_str()), "V2D TPC-FMD3", 800, 600);
     c4->cd();
-    drawPad(f, "V2D_TPC_FMD3", "V_{2#Delta} (TPC-FMD3)", 0.05);
+    drawPad(f, "V2D_TPC_FMD3", "V_{2#Delta} (TPC-FMD3)", -0.05, 0.05, g);
     save(c4, outdir, "V2D_TPC_FMD3");
 
     // V2D FMD1,2-FMD3 (single number)
     TCanvas* c5 = new TCanvas(Form("c_fmdfmd_%s", cls.c_str()), "V2D FMD12-FMD3", 800, 600);
     c5->cd();
-    drawRef(f);
+    drawRef(f, g);
     save(c5, outdir, "V2D_FMD12_FMD3");
 
     f->Close();

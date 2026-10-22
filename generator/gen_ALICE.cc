@@ -4,10 +4,12 @@
 #include <cmath>
 #include <algorithm>
 #include <vector>
+#include <deque>
 #include <string>
 #include "Pythia8/Pythia.h"
 #include "TFile.h"
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TString.h"
 
 // ---- acceptance windows -----
@@ -35,7 +37,7 @@ static const int NCH_LM_MAX   = 20;    // LM: nchCent < 20
 
 // ---- identified-particle acceptance ----
 static const double PID_ETA_MAX = 0.8;   // pi, K, p: |eta| < 0.8
-static const double V0_Y_MAX    = 0.5;   // K0S, Lambda: |y| < 0.5
+static const double V0_Y_MAX    = 0.5;   // K0S, Lambda: |y| < 0.5 and, simultaneously, |eta| < PID_ETA_MAX
 
 // ---- common pT binning for all species ----
 static const int    NpT_bins = 20;
@@ -48,7 +50,7 @@ inline int ptBin(double pt) {
     return int(std::upper_bound(PT_EDGES, PT_EDGES + NpT_bins + 1, pt) - PT_EDGES) - 1;
 }
 
-//Event classifier block (EC)
+// Event classifier block (EC)
 // ---- event classes  ----
 enum EvClass { HM = 0, LM = 1, HM35 = 2, NCLS = 3 };// NCLS = number of classes
 static const char* CLS_NAME[NCLS] = {"HM", "LM", "HM35"};
@@ -81,8 +83,8 @@ inline int speciesOf(int absId) {
 }
 
 // ---- pairings ----
-// TPC_FMD12  : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 for k0s and Lambda) with a charged particle in FMD1,2
-// TPC_FMD3   : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 for k0s and Lambda) with a charged particle in FMD3
+// TPC_FMD12  : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 and |eta|<0.8 for k0s and Lambda) with a charged particle in FMD1,2
+// TPC_FMD3   : identified trigger (|eta|<0.8 for p,K,pi, |y|<0.5 and |eta|<0.8 for k0s and Lambda) with a charged particle in FMD3
 // FMD12_FMD3 : charged particle in FMD1,2 with one in FMD3 (no PID, no pT bins)
 // only the first two are used for the identified-particle histograms (NIDPAIR)
 enum Pairing { TPC_FMD12 = 0, TPC_FMD3 = 1, FMD12_FMD3 = 2, NPAIR = 3 };
@@ -92,6 +94,12 @@ static const char* PAIR_NAME[NPAIR] = {"TPC_FMD12", "TPC_FMD3", "FMD12_FMD3"};
 // |deta| window, as in the paper. Pairs outside it are discarded.
 static const double DETA_MIN = 1.1;
 static const double DETA_MAX = 6.4;
+
+// delta-eta axis of the 2D histograms: 0.1-wide bins over [DETA_MIN, DETA_MAX)
+static const int NDETA = 53;
+
+// mixed-event pool: number of previous events (per class) that the triggers are paired with
+static const int POOL_DEPTH = 5;
 
 // delta-phi axis: 20 bins over [-pi/2, 3pi/2)
 static const int    NDPHI   = 20;
@@ -107,18 +115,21 @@ inline double wrapDPhi(double d) {
 // Trigger and Reference particle properties
 struct Trig { double eta, phi; int sp, pb; };
 struct Ref  { double eta, phi; };
+// reference particles of one past event, kept in the mixed-event pool
+struct PooledEvent { std::vector<Ref> f12, f3; };
 
 int main(int argc, char* argv[]) {
 
-    if (argc != 4) {
+    if (argc != 5) {
         std::cerr << "Usage: " << argv[0]
-                  << " <n_events> <seed> <output_file>" << std::endl;
+                  << " <n_events> <seed> <output_file> <g>" << std::endl;
         return 1;
     }
 
     long n_events        = std::atol(argv[1]);
     int  seed            = std::atoi(argv[2]);
     std::string outFile  = argv[3];
+    double gShove        = std::atof(argv[4]);   // shoving strength, set in run_ALICE.sh
     std::string progFile = "logs/log_ALICE/progress_task" + std::to_string(seed) + ".txt"; // Progress monitoring and receiving event deatils
 
     Pythia8::Pythia pythia;
@@ -133,7 +144,7 @@ int main(int argc, char* argv[]) {
 
     pythia.readString("Ropewalk:RopeHadronization = on");
     pythia.readString("Ropewalk:doShoving = on");
-    pythia.readString("Ropewalk:gAmplitude = 10");   // change per run: 3 / 10 / 40
+    pythia.readString("Ropewalk:gAmplitude = " + std::to_string(gShove));   // from run_ALICE.sh
     pythia.readString("Ropewalk:r0 = 0.41");
     pythia.readString("Ropewalk:rCutOff = 10");
     pythia.readString("Ropewalk:deltay = 0.10");
@@ -147,11 +158,23 @@ int main(int argc, char* argv[]) {
 
     pythia.init();
 
+    // generator_info.txt next to the output file: PYTHIA version and shoving strength g actually used
+
+    {
+        const size_t slash = outFile.find_last_of('/');
+        const std::string dir = (slash == std::string::npos) ? "." : outFile.substr(0, slash);
+        std::ofstream info(dir + "/generator_info.txt", std::ios::trunc);
+        info << "PYTHIA version: " << pythia.settings.parm("Pythia:versionNumber") << "\n"
+             << "Ropewalk:gAmplitude (g): " << pythia.settings.parm("Ropewalk:gAmplitude") << "\n";
+    }
+
     // Histograms and counters
-    // identified-trigger correlations: [class][species][pT bin][TPC_FMD12 / TPC_FMD3]
-    TH1D* hID[NCLS][NSP][NpT_bins][NIDPAIR];
+    // identified-trigger correlations, same event (S) and mixed event (B): [class][species][pT bin][TPC_FMD12 / TPC_FMD3]
+    TH2D* hID[NCLS][NSP][NpT_bins][NIDPAIR];
+    TH2D* hIDmix[NCLS][NSP][NpT_bins][NIDPAIR];
     // FMD12-FMD3 (no identified particle, no pT binning)
-    TH1D* hFF[NCLS];
+    TH2D* hFF[NCLS];
+    TH2D* hFFmix[NCLS];
     // normalisation
     TH1D* hNtrig[NCLS][NSP];      // identified triggers vs pT (variable bins = PT_EDGES)
     TH1D* hNassoc[NCLS][2];       // associated particles in FMD12 / FMD3, 1 bin
@@ -174,17 +197,25 @@ int main(int argc, char* argv[]) {
                                     ";p_{T} (GeV/c);N_{trig}", NpT_bins, PT_EDGES);
             for (int b = 0; b < NpT_bins; ++b)
                 for (int p = 0; p < NIDPAIR; ++p) {
-                    hID[c][s][b][p] = new TH1D(
+                    hID[c][s][b][p] = new TH2D(
                         Form("hCorr_%s_%s_%s_pt%d", CLS_NAME[c], PAIR_NAME[p], SP_NAME[s], b),
-                        Form("%s %s %s, p_{T} %.2f-%.2f;#Delta#phi;pairs",
+                        Form("%s %s %s, p_{T} %.2f-%.2f;#Delta#phi;#Delta#eta;pairs",
                              CLS_NAME[c], PAIR_NAME[p], SP_NAME[s], PT_EDGES[b], PT_EDGES[b + 1]),
-                        NDPHI, DPHI_LO, DPHI_HI);
+                        NDPHI, DPHI_LO, DPHI_HI, NDETA, DETA_MIN, DETA_MAX);
+                    hIDmix[c][s][b][p] = new TH2D(
+                        Form("hMix_%s_%s_%s_pt%d", CLS_NAME[c], PAIR_NAME[p], SP_NAME[s], b),
+                        Form("%s %s %s mixed, p_{T} %.2f-%.2f;#Delta#phi;#Delta#eta;pairs",
+                             CLS_NAME[c], PAIR_NAME[p], SP_NAME[s], PT_EDGES[b], PT_EDGES[b + 1]),
+                        NDPHI, DPHI_LO, DPHI_HI, NDETA, DETA_MIN, DETA_MAX);
                 }
         }
 
-        hFF[c] = new TH1D(Form("hCorr_%s_FMD12_FMD3", CLS_NAME[c]),
-                          Form("%s FMD12_FMD3;#Delta#phi;pairs", CLS_NAME[c]),
-                          NDPHI, DPHI_LO, DPHI_HI);
+        hFF[c] = new TH2D(Form("hCorr_%s_FMD12_FMD3", CLS_NAME[c]),
+                          Form("%s FMD12_FMD3;#Delta#phi;#Delta#eta;pairs", CLS_NAME[c]),
+                          NDPHI, DPHI_LO, DPHI_HI, NDETA, DETA_MIN, DETA_MAX);
+        hFFmix[c] = new TH2D(Form("hMix_%s_FMD12_FMD3", CLS_NAME[c]),
+                             Form("%s FMD12_FMD3 mixed;#Delta#phi;#Delta#eta;pairs", CLS_NAME[c]),
+                             NDPHI, DPHI_LO, DPHI_HI, NDETA, DETA_MIN, DETA_MAX);
         hNassoc[c][0] = new TH1D(Form("hNassoc_%s_FMD12", CLS_NAME[c]), "N_{assoc} FMD12", 1, 0, 1);
         hNassoc[c][1] = new TH1D(Form("hNassoc_%s_FMD3",  CLS_NAME[c]), "N_{assoc} FMD3",  1, 0, 1);
         hEvents[c]    = new TH1D(Form("hEvents_%s", CLS_NAME[c]), "events", 1, 0, 1);
@@ -196,6 +227,7 @@ int main(int argc, char* argv[]) {
     // ---- event loop ----
     std::vector<Trig> trig;
     std::vector<Ref>  f12, f3;
+    std::deque<PooledEvent> pool[NCLS];     // previous events of each class (mixed-event pool)
 
     for (long i = 0; i < n_events; ++i) {
 
@@ -226,7 +258,7 @@ int main(int argc, char* argv[]) {
             const int sp = speciesOf(std::abs(p.id()));
             if (sp < 0) continue;
             const bool isV0  = (sp == K0S || sp == LAM);
-            const bool inAcc = isV0 ? (std::fabs(p.y()) < V0_Y_MAX)
+            const bool inAcc = isV0 ? (std::fabs(p.y()) < V0_Y_MAX && std::fabs(eta) < PID_ETA_MAX)
                                     : (std::fabs(eta)   < PID_ETA_MAX);
             const int pb = ptBin(pt);
             if (inAcc && pb >= 0) trig.push_back({eta, phi, sp, pb});
@@ -259,20 +291,47 @@ int main(int argc, char* argv[]) {
                 for (const Ref& r : f12) {                       // TPC - FMD1,2
                     const double deta = r.eta - t.eta;
                     if (deta < DETA_MIN || deta > DETA_MAX) continue;
-                    hID[c][t.sp][t.pb][TPC_FMD12]->Fill(wrapDPhi(t.phi - r.phi));
+                    hID[c][t.sp][t.pb][TPC_FMD12]->Fill(wrapDPhi(t.phi - r.phi), deta);
                 }
                 for (const Ref& r : f3) {                        // TPC - FMD3
                     const double deta = t.eta - r.eta;
                     if (deta < DETA_MIN || deta > DETA_MAX) continue;
-                    hID[c][t.sp][t.pb][TPC_FMD3]->Fill(wrapDPhi(t.phi - r.phi));
+                    hID[c][t.sp][t.pb][TPC_FMD3]->Fill(wrapDPhi(t.phi - r.phi), deta);
                 }
             }
             for (const Ref& a : f12)                             // FMD1,2 - FMD3
                 for (const Ref& b : f3) {
                     const double deta = a.eta - b.eta;
                     if (deta < DETA_MIN || deta > DETA_MAX) continue;
-                    hFF[c]->Fill(wrapDPhi(a.phi - b.phi));
+                    hFF[c]->Fill(wrapDPhi(a.phi - b.phi), deta);
                 }
+
+            // mixed events: current triggers / FMD1,2 particles with the references of the pooled events
+            for (const PooledEvent& m : pool[c]) {
+                for (const Trig& t : trig) {
+                    for (const Ref& r : m.f12) {                 // TPC - FMD1,2
+                        const double deta = r.eta - t.eta;
+                        if (deta < DETA_MIN || deta > DETA_MAX) continue;
+                        hIDmix[c][t.sp][t.pb][TPC_FMD12]->Fill(wrapDPhi(t.phi - r.phi), deta);
+                    }
+                    for (const Ref& r : m.f3) {                  // TPC - FMD3
+                        const double deta = t.eta - r.eta;
+                        if (deta < DETA_MIN || deta > DETA_MAX) continue;
+                        hIDmix[c][t.sp][t.pb][TPC_FMD3]->Fill(wrapDPhi(t.phi - r.phi), deta);
+                    }
+                }
+                for (const Ref& a : f12)                         // FMD1,2 - FMD3
+                    for (const Ref& b : m.f3) {
+                        const double deta = a.eta - b.eta;
+                        if (deta < DETA_MIN || deta > DETA_MAX) continue;
+                        hFFmix[c]->Fill(wrapDPhi(a.phi - b.phi), deta);
+                    }
+            }
+
+            // FIFO pool 
+            // pushed after pairing, so mixing starts with the 2nd event of the class and saturates at POOL_DEPTH = n
+            pool[c].push_back({f12, f3});
+            if ((int)pool[c].size() > POOL_DEPTH) pool[c].pop_front();
         }
 
         // progress monitoring every 100th event
@@ -289,9 +348,10 @@ int main(int argc, char* argv[]) {
         for (int s = 0; s < NSP; ++s) {
             hNtrig[c][s]->Write();
             for (int b = 0; b < NpT_bins; ++b)
-                for (int p = 0; p < NIDPAIR; ++p) hID[c][s][b][p]->Write();
+                for (int p = 0; p < NIDPAIR; ++p) { hID[c][s][b][p]->Write(); hIDmix[c][s][b][p]->Write(); }
         }
         hFF[c]->Write();
+        hFFmix[c]->Write();
         hNassoc[c][0]->Write();
         hNassoc[c][1]->Write();
         hEvents[c]->Write();

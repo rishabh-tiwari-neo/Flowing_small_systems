@@ -1,7 +1,7 @@
 // Analyser for the stat_check output (tree "events"), early statistics and understanding.
-//   build:  g++ -O2 -o post/analyser_ALICE post/analyser_ALICE.cc `root-config --cflags --libs`
-//   run:    ./post/analyser_ALICE                 (reads data/test_run/stat_ALICE.root)
-//           ./post/analyser_ALICE other.root      (optional: another file)
+//   build:  g++ -O2 -o post/analyser post/analyser.cc `root-config --cflags --libs`
+//   run:    ./post/analyser                       (reads data/test_run/stat_ALICE.root)
+//           ./post/analyser other.root          (optional: another file)
 // run from the project root (~/project/V2delta/main)
 #include <cstdio>
 #include <cmath>

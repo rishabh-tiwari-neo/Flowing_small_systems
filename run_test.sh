@@ -1,7 +1,7 @@
 #!/bin/bash
 # Hardcoded run configuration
-TOTAL=10000
-NCORES=5
+TOTAL=100000
+NCORES=4
 
 GEN_BIN="generator/stat_check"
 SRC="generator/stat_check.cc"
