@@ -7,14 +7,14 @@ Welcome! This study is on long-range correlations and flow signatures in small s
 ```
 main/
 ├── run_ALICE.sh            # Runs generation, merges, then fits and plots automatically
-├── run_test.sh             # test run script
+├── run_test.sh             # test run script (just a test script)
 ├── Makefile                # Auto-detects ROOT via root-config and PYTHIA (uses $PYTHIA8 if set, otherwise searches standard folders)
 ├── generator/
-│   └── gen_ALICE.cc        # PYTHIA8 generator for ALICE-like generation
-│   └── stat_check.cc       # PYTHIA8 generator for checking statistics in the above given configuration (need for pre-run)
+│   └── gen_ALICE.cc        # PYTHIA8 generator for ALICE-like generation (the keyword is "Like")
+│   └── stat_check.cc       # PYTHIA8 generator for checking statistics in the above given configuration (was needed pre-run, for stats)
 ├── post/
-│   ├── analyser_ALICE.cc   # Prints event, multiplicity and trigger statistics of a merged file
-│   ├── post_ALICE.cc       # Template fit, V2Delta extraction, 3x2PC combination -> v2(pT)
+│   ├── analyser_ALICE.cc   # Prints event, multiplicity and trigger statistics of a merged file (used pre-run again)
+│   ├── post_ALICE.cc       # Template fit, V2Delta extraction, 3x2PC combination -> v2(pT) 
 │   └── plot_ALICE.cc       # Makes the plots from the post-processing output
 ├── data/                   # ROOT files (one sub-folder per generation run)
 ├── logs/                   # Seeds, per-task logs, progress files, summaries, fit tables
@@ -48,7 +48,7 @@ main/
 
 ## What the post-processing does
 
-- `analyser_ALICE`: prints event counts, class fractions (HM, LM, HM35), mean multiplicities per class, trigger yields, and same-event and mixed-event pair counts of a merged `gen_ALICE` file. The pT bins are read from the file.
+- `analyser_ALICE`: prints event counts, class fractions (HM, LM, HM35), mean multiplicities per class, trigger yields, and same-event and mixed-event pair counts of a merged `gen_ALICE` file. The pT bins are read from the file. Again for testing and stats. 
 - `post_ALICE`: for each class (HM, HM35), pairing, species and pT bin, builds the per-trigger yield Y(Delta-phi) = S/B (see Methodology), fits it with the LM template (template fit: weighted linear least squares, errors from the fit covariance matrix), and extracts V2Delta. The three pairings are then combined (3x2PC):
   - v2^2 = V2D(TPC-FMD1,2) x V2D(TPC-FMD3) / V2D(FMD1,2-FMD3), keeping the sign. No square root is taken, since v2^2 can come out negative when the combination fails.
   K0S and Lambda are sparse, so for them the pT bins are merged before the S/B division: the 2D S and B histograms and the trigger counts of the generator bins are summed, giving the bins 0.5-0.8, 0.8-1.25, 1.25-1.75, 1.75-2.25, 2.25-2.75, 2.75-3.25, 3.25-4.0, 4.0-5.0, 5.0-6.0, 6.0-10 GeV/c (table `ptGroups` in `post_ALICE.cc`). pi, K and p keep the 20 generator bins.
@@ -130,7 +130,6 @@ Files and folders used (set as constants at the top of the programs):
 ### 5. How to read the results
 
 - The main result is V2Delta per species and pT bin, for TPC-FMD1,2 and TPC-FMD3, plus the single V2Delta(FMD1,2-FMD3) per class.
-- v2^2 is only meaningful where V2D(TPC-FMD1,2), V2D(TPC-FMD3) and V2D(FMD1,2-FMD3) have the same sign. A negative v2^2 means the combination failed (noise or factorisation breaking), not negative flow.
 
 ### 6. Things to keep in mind
 
@@ -140,13 +139,6 @@ Files and folders used (set as constants at the top of the programs):
 - Errors are statistical only (from the fit covariance). They treat the LM template as exact and the pairs as independent, so they are somewhat too small (chi2/ndf of the fits is typically about 1.2 to 2.2). There are no systematic uncertainties yet.
 - The cosines in the fit are evaluated at the Delta-phi bin centres, which biases V2 low by about 1.6%.
 - The shoving strength g is set inside `gen_ALICE.cc` (`Ropewalk:gAmplitude`) and is written, with the PYTHIA version, to `generator_info.txt` in the data folder. Keep different g values in different folders anyway.
-- Files generated with and without the K0S/Lambda |eta| < 0.8 cut (it changes the Lambda 0.5-0.6 GeV/c bin) must not be merged.
 - Histogram names must stay identical in `gen_ALICE.cc` and `post_ALICE.cc`; species names must also match in `plot_ALICE.cc`.
 - Fits fail (printed as "fit failed") when a bin has too few pairs. This is expected in small test runs, especially for HM at high pT.
 
-## Known behaviour of the results (250M events, S/B)
-
-- Reference: V2D(FMD1,2-FMD3) = 2.52e-4 +- 8.6e-6 for HM35 (chi2/ndf 1.20) and 1.5e-4 +- 5.0e-5 for HM (1.46).
-- Pions in HM35 have a negative V2Delta above about 0.8 GeV/c. It comes almost entirely from the Delta-eta 1.1-2.0 slice (short-range non-flow next to the Delta-eta cut) where the template fit also has a poor chi2/ndf; the other Delta-eta slices are close to zero. The resulting v2^2 is positive only because both TPC V2Delta values are negative, so it is not a flow signal.
-- K0S and Lambda have few triggers at high pT. In S/B the B cells with few counts get a large weight (c/B) and give large and irregular errors. Merging the pT bins fixed this for Lambda; for K0S the values at 3.25-5 GeV/c are still dominated by noise and should not be read.
-- v2^2 plots: the large error bars of the noisy K0S and Lambda points stretch the y-axis.
