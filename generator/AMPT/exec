@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -e
+
+mkdir -p ana
+echo "ampt-v1.26t9b-v2.26t9b-fast-root" > ana/version
+
+# Random seeds: HIJING seed in 1..10^9 (AMPT uses 2*NSEED+1, which must stay
+# below 2^31) and a positive ZPC seed (zpc.f ran1 needs iseedp > 0)
+random_seed() {
+    echo $(( $(od -vAn -N4 -tu4 < /dev/urandom | tr -d ' ') % 1000000000 + 1 ))
+}
+SRAND1=$(random_seed)
+SRAND2=$(random_seed)
+export AMPT_ROOT_OUT="${AMPT_ROOT_OUT:-ana/ampt.root}"
+
+make
+cp input.ampt ana/
+echo "#  AMPT started at $(date)" > start.time
+./ampt <<EOF > nohup.out 2>&1
+${SRAND1}
+${SRAND2}
+EOF
+uname -n >> nohup.out
+cat start.time >> nohup.out
+rm -f start.time
+echo "#  AMPT Program finished at $(date)" >> nohup.out
+
+echo "Finished. Output written to ${AMPT_ROOT_OUT}"
