@@ -5,9 +5,24 @@
 // (for FMD1,2-FMD3: the number of FMD1,2 particles).
 // Weighted linear least-squares fitting with analytical covariance-based error estimation.
 // The LM template is treated as exact, so its error is not in the V2Δ uncertainty.
-// Sparse species (K0S, Lambda) are analysed in coarser pT bins: the 2D S and B histograms of
-// several generator pT bins are summed before dividing (see ptGroups).
-// The three V2Δ (TPC-FMD1,2, TPC-FMD3, FMD1,2-FMD3) are combined into v2^2 (3x2PC). 
+// Any species can be analysed in coarser pT bins: the 2D S and B histograms of
+// several generator pT bins are summed before dividing (see the REBIN table and ptGroups).
+// The three V2Δ (TPC-FMD1,2, TPC-FMD3, FMD1,2-FMD3) are combined into v2^2 (3x2PC).
+// Plain v2 = sqrt(v2^2) is also written (graph "v2_<sp>", CSV columns v2/err), defined
+// only where v2^2 > 0. v2 is always positive and so loses the sign of the underlying
+// V2Delta -- check v2^2 or the per-pairing V2Delta before drawing conclusions from v2.
+//
+// Per-pairing deta window: gen_ALICE.cc fills all three pairings into the same 1.1-6.4
+// deta axis, but each pairing can only physically produce pairs in a narrower range set
+// by its two eta acceptances (trigger |eta|<0.8, FMD1,2 1.7-5.1, FMD3 -3.1 to -1.7).
+// Outside that kinematic range a deta slice is exactly empty and is skipped anyway
+// (B<=0). Just inside the edge, though, the number of (eta_trig, eta_ref) combinations
+// that can produce a deta that close to the kinematic maximum tapers toward zero, so a
+// handful of slices there can have only a few raw pairs even with huge total statistics.
+// Those thin slices get heavy weight in the variance sum (it scales like 1/B^4) and can
+// dominate a point's error, or even make the template fit unable to tell the template
+// scale F apart from the flow amplitude a2 (seen as |rho| close to 1 in diag_ALICE.cc).
+// WIN_* below trims DETA_EDGE_MARGIN off each kinematic edge to stay out of that taper.
 
 #include <iostream>
 #include <fstream>
@@ -27,6 +42,19 @@ static const int NSP = 5;
 static const char* SP_NAME[NSP] = {"pi", "K", "p", "K0S", "Lam"};
 static const char* DATA_DIR = "data/data_ALICE";
 static const std::vector<std::string> CLASSES = {"HM", "HM35"};
+
+// kinematic deta = eta_ref - eta_trig (or eta_a - eta_b) ranges, from the acceptance
+// cuts in gen_ALICE.cc: trigger |eta|<0.8, FMD1,2 1.7<eta<5.1, FMD3 -3.1<eta<-1.7.
+//   TPC-FMD1,2:  deta = eta_FMD12 - eta_trig  -> (1.7-0.8, 5.1+0.8)   = (0.9, 5.9)
+//   TPC-FMD3:    deta = eta_trig - eta_FMD3   -> (-0.8-(-1.7), 0.8-(-3.1)) = (0.9, 3.9)
+//   FMD1,2-FMD3: deta = eta_FMD12 - eta_FMD3  -> (1.7-(-1.7), 5.1-(-3.1))  = (3.4, 8.2)
+// margin trimmed off each edge to stay clear of the low-count taper near the kinematic
+// boundary (see the comment at the top of this file). Tune DETA_EDGE_MARGIN if needed.
+static const double DETA_EDGE_MARGIN = 0.4;
+struct DetaWindow { double lo, hi; };
+static const DetaWindow WIN_TPC_FMD12  = {0.9 + DETA_EDGE_MARGIN, 5.9 - DETA_EDGE_MARGIN};
+static const DetaWindow WIN_TPC_FMD3   = {0.9 + DETA_EDGE_MARGIN, 3.9 - DETA_EDGE_MARGIN};
+static const DetaWindow WIN_FMD12_FMD3 = {3.4 + DETA_EDGE_MARGIN, 8.2 - DETA_EDGE_MARGIN};
 
 // initialising the fit results
 struct FitResult {
@@ -136,16 +164,22 @@ static TH2D* getH2(TFile* f, const TString& name) {
     return h;
 }
 
-// pT bins of the generator that are merged for each species. {first, last} bin, inclusive.
-// pi, K, p keep the 20 generator bins; K0S and Lambda use coarser bins because they are sparse.
-static const int K0S_IDX = 3, LAM_IDX = 4;
+// pT rebinning table, one entry per species in SP_NAME order: pi, K, p, K0S, Lam.
+// Each {first, last} is an inclusive range of generator pT bins (0..19) merged into one output bin.
+// An empty list keeps the 20 generator bins unchanged.
+static const std::vector<std::vector<std::pair<int, int>>> REBIN = {
+    /* pi  */ {},
+    /* K   */ {},
+    /* p   */ {},
+    /* K0S */ {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}, {12, 14}, {15, 16}, {17, 18}, {19, 19}},
+    /* Lam */ {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}, {12, 14}, {15, 16}, {17, 18}, {19, 19}}
+};
+
 static std::vector<std::pair<int, int>> ptGroups(int species, int nbGen) {
-    static const int v0[][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}, {12, 14}, {15, 16}, {17, 18}, {19, 19}};
+    if (nbGen == 20 && species >= 0 && species < NSP && !REBIN[species].empty())
+        return REBIN[species];
     std::vector<std::pair<int, int>> g;
-    if ((species == K0S_IDX || species == LAM_IDX) && nbGen == 20)
-        for (const auto& r : v0) g.push_back({r[0], r[1]});
-    else
-        for (int b = 0; b < nbGen; ++b) g.push_back({b, b});
+    for (int b = 0; b < nbGen; ++b) g.push_back({b, b});
     return g;
 }
 
@@ -160,13 +194,27 @@ static std::vector<TString> binNames(const char* kind, const std::string& cls, c
 // Per-trigger yield: (S / (B/c)) summed over deta, divided by ntrig.
 // S and B are the sums of the listed histograms (merged pT bins).
 // c = dphi average of B at the deta bin where B is largest.
+// detaLo/detaHi restrict the deta slices that are summed, to the pairing's trimmed
+// kinematic window (see WIN_TPC_FMD12 etc. above); a slice whose bin centre falls
+// outside [detaLo, detaHi] is skipped entirely, same as an empty (B<=0) slice.
+// c is computed from, and val/var are summed over, only the slices inside the window,
+// so a thin slice just beyond the cut does not leak into either the normalisation or
+// the fit input. Defaults keep the full axis, for any caller that does not pass a window.
 static std::unique_ptr<TH1D> yieldDphi(TFile* f, const std::vector<TString>& namesS,
-                                       const std::vector<TString>& namesB, double ntrig) {
+                                       const std::vector<TString>& namesB, double ntrig,
+                                       double detaLo = -1e9, double detaHi = 1e9) {
     if (namesS.empty() || namesS.size() != namesB.size() || ntrig <= 0) return nullptr;
     TH2D* h0 = getH2(f, namesS[0]);
     if (!h0) return nullptr;
     const int nx = h0->GetNbinsX(), ny = h0->GetNbinsY();
     const double xmin = h0->GetXaxis()->GetXmin(), xmax = h0->GetXaxis()->GetXmax();
+
+    // which deta slices (y bins) fall inside the requested window
+    std::vector<bool> inWin(ny, true);
+    for (int iy = 1; iy <= ny; ++iy) {
+        const double center = h0->GetYaxis()->GetBinCenter(iy);
+        inWin[iy - 1] = (center >= detaLo && center <= detaHi);
+    }
 
     std::vector<double> S(nx * ny, 0.0), eS2(nx * ny, 0.0), B(nx * ny, 0.0), eB2(nx * ny, 0.0);
     for (size_t k = 0; k < namesS.size(); ++k) {
@@ -175,6 +223,7 @@ static std::unique_ptr<TH1D> yieldDphi(TFile* f, const std::vector<TString>& nam
         if (!hS || !hB) return nullptr;
         for (int ix = 1; ix <= nx; ++ix)
             for (int iy = 1; iy <= ny; ++iy) {
+                if (!inWin[iy - 1]) continue;
                 const int i = (ix - 1) * ny + (iy - 1);
                 S[i] += hS->GetBinContent(ix, iy);  eS2[i] += std::pow(hS->GetBinError(ix, iy), 2);
                 B[i] += hB->GetBinContent(ix, iy);  eB2[i] += std::pow(hB->GetBinError(ix, iy), 2);
@@ -183,6 +232,7 @@ static std::unique_ptr<TH1D> yieldDphi(TFile* f, const std::vector<TString>& nam
 
     double c = 0;
     for (int iy = 1; iy <= ny; ++iy) {
+        if (!inWin[iy - 1]) continue;
         double s = 0;
         for (int ix = 1; ix <= nx; ++ix) s += B[(ix - 1) * ny + (iy - 1)];
         s /= nx;
@@ -194,6 +244,7 @@ static std::unique_ptr<TH1D> yieldDphi(TFile* f, const std::vector<TString>& nam
     for (int ix = 1; ix <= nx; ++ix) {
         double val = 0, var = 0;
         for (int iy = 1; iy <= ny; ++iy) {
+            if (!inWin[iy - 1]) continue;
             const int i = (ix - 1) * ny + (iy - 1);
             const double b = B[i];
             if (b <= 0) continue;
@@ -240,16 +291,21 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
             std::cerr << "WARNING: " << DATA_DIR << "/generator_info.txt not found" << std::endl;
         }
         csv << "# class: " << cls << "\n";
+        csv << "# deta window (TPC-FMD12): " << WIN_TPC_FMD12.lo << "-" << WIN_TPC_FMD12.hi << "\n";
+        csv << "# deta window (TPC-FMD3):  " << WIN_TPC_FMD3.lo  << "-" << WIN_TPC_FMD3.hi  << "\n";
+        csv << "# deta window (FMD12-FMD3):" << WIN_FMD12_FMD3.lo << "-" << WIN_FMD12_FMD3.hi << "\n";
     }
     csv << "species,pt_low,pt_high,V2D_TPC_FMD12,err,chi2ndf,V2D_TPC_FMD3,err,chi2ndf,"
-           "V2D_FMD12_FMD3,err,chi2ndf,v2sq,err\n";
+           "V2D_FMD12_FMD3,err,chi2ndf,v2sq,err,v2,err\n";
 
     // ---- reference: FMD12 - FMD3 (one number, no pT dependence) -----
     const double nFF   = count1(fin, Form("hNassoc_%s_FMD12", cls.c_str()));   // FMD1,2 particles = triggers
     const double nFFlm = count1(fin, "hNassoc_LM_FMD12");
     const FitResult fc = templateFit(
-        yieldDphi(fin, {Form("hCorr_%s_FMD12_FMD3", cls.c_str())}, {Form("hMix_%s_FMD12_FMD3", cls.c_str())}, nFF).get(),
-        yieldDphi(fin, {"hCorr_LM_FMD12_FMD3"}, {"hMix_LM_FMD12_FMD3"}, nFFlm).get());
+        yieldDphi(fin, {Form("hCorr_%s_FMD12_FMD3", cls.c_str())}, {Form("hMix_%s_FMD12_FMD3", cls.c_str())}, nFF,
+                  WIN_FMD12_FMD3.lo, WIN_FMD12_FMD3.hi).get(),
+        yieldDphi(fin, {"hCorr_LM_FMD12_FMD3"}, {"hMix_LM_FMD12_FMD3"}, nFFlm,
+                  WIN_FMD12_FMD3.lo, WIN_FMD12_FMD3.hi).get());
     std::cout << "Class " << cls << ", template LM\n";
     if (fc.ok)
         std::printf("V2D(FMD12-FMD3) = %.4e +- %.4e   chi2/ndf = %.2f\n", fc.V2, fc.err, fc.chi2ndf);
@@ -273,6 +329,11 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
         TGraphErrors* gA = new TGraphErrors(); gA->SetName(Form("V2D_TPC_FMD12_%s", sp));
         TGraphErrors* gB = new TGraphErrors(); gB->SetName(Form("V2D_TPC_FMD3_%s",  sp));
         TGraphErrors* gS = new TGraphErrors(); gS->SetName(Form("v2sq_%s", sp));
+        // plain v2 = sqrt(v2sq), filled only where v2sq > 0 (v2sq <= 0 has no real sqrt,
+        // and is itself a sign that the 3x2PC combination did not work for that point --
+        // see the "Sign of V2Delta" note in Readme.md). This is a positive quantity: it
+        // carries no information about the sign of the underlying V2D(TPC-FMD12/FMD3).
+        TGraphErrors* gV2 = new TGraphErrors(); gV2->SetName(Form("v2_%s", sp));
 
         std::printf("\n== %s ==\n", sp);
         std::printf("%-11s %-24s %-24s %-24s\n", "pT", "V2D TPC-FMD12", "V2D TPC-FMD3", "v2sq");
@@ -288,14 +349,18 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
 
             const FitResult fa = templateFit(
                 yieldDphi(fin, binNames("hCorr", cls, "TPC_FMD12", sp, b0, b1),
-                               binNames("hMix",  cls, "TPC_FMD12", sp, b0, b1), nT).get(),
+                               binNames("hMix",  cls, "TPC_FMD12", sp, b0, b1), nT,
+                               WIN_TPC_FMD12.lo, WIN_TPC_FMD12.hi).get(),
                 yieldDphi(fin, binNames("hCorr", "LM", "TPC_FMD12", sp, b0, b1),
-                               binNames("hMix",  "LM", "TPC_FMD12", sp, b0, b1), nTlm).get());
+                               binNames("hMix",  "LM", "TPC_FMD12", sp, b0, b1), nTlm,
+                               WIN_TPC_FMD12.lo, WIN_TPC_FMD12.hi).get());
             const FitResult fb = templateFit(
                 yieldDphi(fin, binNames("hCorr", cls, "TPC_FMD3", sp, b0, b1),
-                               binNames("hMix",  cls, "TPC_FMD3", sp, b0, b1), nT).get(),
+                               binNames("hMix",  cls, "TPC_FMD3", sp, b0, b1), nT,
+                               WIN_TPC_FMD3.lo, WIN_TPC_FMD3.hi).get(),
                 yieldDphi(fin, binNames("hCorr", "LM", "TPC_FMD3", sp, b0, b1),
-                               binNames("hMix",  "LM", "TPC_FMD3", sp, b0, b1), nTlm).get());
+                               binNames("hMix",  "LM", "TPC_FMD3", sp, b0, b1), nTlm,
+                               WIN_TPC_FMD3.lo, WIN_TPC_FMD3.hi).get());
 
             if (fa.ok) { int n = gA->GetN(); gA->SetPoint(n, x, fa.V2); gA->SetPointError(n, ex, fa.err); }
             if (fb.ok) { int n = gB->GetN(); gB->SetPoint(n, x, fb.V2); gB->SetPointError(n, ex, fb.err); }
@@ -311,6 +376,15 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
                 int n = gS->GetN(); gS->SetPoint(n, x, v2sq); gS->SetPointError(n, ex, ev2sq);
             }
 
+            // plain v2 = sqrt(v2sq); only defined where v2sq > 0
+            const bool   okV2 = okC && v2sq > 0;
+            double v2 = 0, ev2 = 0;
+            if (okV2) {
+                v2  = std::sqrt(v2sq);
+                ev2 = ev2sq / (2.0 * v2);
+                int n = gV2->GetN(); gV2->SetPoint(n, x, v2); gV2->SetPointError(n, ex, ev2);
+            }
+
             std::printf("%4.2f-%-5.2f  %s  %s  %s\n", lo, hi,
                         fa.ok ? Form("%+.3e +- %.2e", fa.V2, fa.err) : "fit failed             ",
                         fb.ok ? Form("%+.3e +- %.2e", fb.V2, fb.err) : "fit failed             ",
@@ -320,10 +394,11 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
                 << num(fa.V2, fa.ok) << "," << num(fa.err, fa.ok) << "," << num(fa.chi2ndf, fa.ok) << ","
                 << num(fb.V2, fb.ok) << "," << num(fb.err, fb.ok) << "," << num(fb.chi2ndf, fb.ok) << ","
                 << num(fc.V2, fc.ok) << "," << num(fc.err, fc.ok) << "," << num(fc.chi2ndf, fc.ok) << ","
-                << num(v2sq, okC) << "," << num(ev2sq, okC) << "\n";
+                << num(v2sq, okC) << "," << num(ev2sq, okC) << ","
+                << num(v2, okV2) << "," << num(ev2, okV2) << "\n";
         }
 
-        gA->Write(); gB->Write(); gS->Write();
+        gA->Write(); gB->Write(); gS->Write(); gV2->Write();
     }
 
     csv.close();

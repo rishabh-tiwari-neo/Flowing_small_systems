@@ -1,9 +1,16 @@
 // plot_ALICE.cc
-// Makes v2sq_vs_pt, V2D_TPC_FMD12, V2D_TPC_FMD3 and V2D_FMD12_FMD3.
+// Makes v2sq_vs_pt, v2_vs_pt, V2D_TPC_FMD12, V2D_TPC_FMD3, V2D_FMD12_FMD3,
+// and the NCQ-scaling plots NCQ_pT (v2/nq vs pT/nq) and NCQ_KET (v2/nq vs KET/nq).
+// Everything is read from v2_results_<class>.root (the "v2_<sp>" graphs post_ALICE
+// writes); no separate tool or CSV parsing needed for the NCQ plots.
+//
+// v2 = sqrt(v2sq) is always positive, so it and the NCQ plots below lose the sign of
+// the underlying V2Delta -- check v2sq_vs_pt or the per-pairing V2D plots for that.
 
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cmath>
 #include <algorithm>
 #include "TROOT.h"
 #include "TStyle.h"
@@ -30,6 +37,16 @@ static const char* SP_LABEL[NSP] = {"#pi^{#pm}", "K^{#pm}", "p+#bar{p}",
                                     "K^{0}_{S}", "#Lambda+#bar{#Lambda}"};
 static const int   SP_COLOR[NSP] = {kBlue, kAzure, kRed, kCyan, kOrange};
 static const int   SP_MARKER[NSP] = {20, 34, 21, 22, 33};
+
+// ---- for NCQ scaling only: PDG mass (GeV/c^2) and number of constituent quarks ----
+static const double SP_MASS[NSP] = {0.13957, 0.49368, 0.93827, 0.49761, 1.11568};
+static const int    SP_NQ[NSP]   = {2, 2, 3, 2, 3};
+
+// significance cut for the NCQ plots: keep a point only if v2/err(v2) exceeds this.
+// (equivalent to a cut of MIN_SIG_V2/2 on v2sq/err(v2sq), since err(v2) = err(v2sq)/(2 v2))
+static const double MIN_SIG_V2 = 4.0;
+
+static inline double ket(double pt, double m) { return std::sqrt(pt * pt + m * m) - m; }
 
 // reads the shoving strength g stored in merged.root by gen_ALICE; returns -1 if absent (older data)
 static double readG() {
@@ -151,6 +168,65 @@ static void drawRef(TFile* f, double g) {
     }
 }
 
+// Draws the NCQ-scaling plot: v2/nq vs pT/nq (kind 0) or v2/nq vs KET/nq (kind 1).
+// Reads the "v2_<sp>" graphs post_ALICE writes (x = pT bin centre, y = v2, with their
+// errors) and rescales each point by the species' nq; for kind 1 the x axis becomes
+// KET = sqrt(pT^2+m^2) - m, evaluated at the bin centre, with the x error propagated
+// from the bin edges (x -+ errorX) through the same KET transform.
+static void drawNCQ(TFile* f, int kind, const std::string& cls, double gShove) {
+    TGraphErrors* g[NSP];
+    double xhi = 0, yhi = 0;
+    bool any = false;
+
+    for (int s = 0; s < NSP; ++s) {
+        TGraphErrors* src = dynamic_cast<TGraphErrors*>(f->Get(Form("v2_%s", SP_NAME[s])));
+        g[s] = new TGraphErrors();
+        if (!src || src->GetN() == 0) continue;
+        const double m = SP_MASS[s], nq = SP_NQ[s];
+        for (int i = 0; i < src->GetN(); ++i) {
+            const double pt = src->GetX()[i], ept = src->GetErrorX(i);
+            const double v2 = src->GetY()[i], ev2 = src->GetErrorY(i);
+            if (ev2 <= 0 || v2 / ev2 < MIN_SIG_V2) continue;
+            const double lo = pt - ept, hi = pt + ept;
+            double x, ex;
+            if (kind == 0) { x = pt / nq;        ex = ept / nq; }
+            else           { x = ket(pt, m) / nq; ex = 0.5 * (ket(hi, m) - ket(lo, m)) / nq; }
+            const int n = g[s]->GetN();
+            g[s]->SetPoint(n, x, v2 / nq);
+            g[s]->SetPointError(n, ex, ev2 / nq);
+            xhi = std::max(xhi, x + ex);
+            yhi = std::max(yhi, (v2 + ev2) / nq);
+        }
+        if (g[s]->GetN() > 0) any = true;
+    }
+    if (!any) { std::cerr << "No points pass the NCQ cuts for " << cls << " (kind " << kind << ")" << std::endl; return; }
+
+    setMargins();
+
+    TH1F* fr = new TH1F(Form("frameN%d", frameCounter++), "", 100, 0, xhi * 1.05);
+    fr->SetStats(0);
+    fr->SetMinimum(0);
+    fr->SetMaximum(yhi * 1.15);
+    fr->GetXaxis()->SetTitle(kind == 0 ? "p_{T}/n_{q} (GeV/c)" : "KE_{T}/n_{q} (GeV)");
+    fr->GetYaxis()->SetTitle("v_{2}/n_{q}");
+    fr->GetYaxis()->CenterTitle(true);
+    fr->GetYaxis()->SetTitleOffset(1.9);
+    fr->Draw("AXIS");
+
+    TLegend* leg = new TLegend(0.18, gShove >= 0 ? 0.62 : 0.68, 0.45, 0.92);
+    if (gShove >= 0) leg->SetHeader(Form("%s, g = %g", cls.c_str(), gShove));
+    else             leg->SetHeader(cls.c_str());
+    leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.04); leg->SetMargin(0.30);
+    for (int s = 0; s < NSP; ++s) {
+        if (g[s]->GetN() == 0) continue;
+        g[s]->SetMarkerStyle(SP_MARKER[s]); g[s]->SetMarkerColor(SP_COLOR[s]);
+        g[s]->SetLineColor(SP_COLOR[s]);    g[s]->SetMarkerSize(1.6);
+        g[s]->Draw("PZ SAME");
+        leg->AddEntry(g[s], SP_LABEL[s], "p");
+    }
+    leg->Draw();
+}
+
 // saves one canvas as PDF and PNG, then deletes it (canvas names stay unique per class)
 static void save(TCanvas* c, const std::string& outdir, const char* name) {
     c->SaveAs((outdir + "/" + name + ".pdf").c_str());
@@ -176,6 +252,23 @@ static bool plotClass(const std::string& cls) {
     c2->cd();
     drawPad(f, "v2sq", "v_{2}^{2}", -1.0, 1.0, g);
     save(c2, outdir, "v2sq_vs_pt");
+
+    // v2 = sqrt(v2sq) vs pT (always positive -- see the note at the top of this file)
+    TCanvas* c2b = new TCanvas(Form("c_v2_%s", cls.c_str()), "v2", 800, 600);
+    c2b->cd();
+    drawPad(f, "v2", "v_{2}", 0.0, 1, g);
+    save(c2b, outdir, "v2_vs_pt");
+
+    // NCQ scaling: v2/nq vs pT/nq and v2/nq vs KET/nq
+    TCanvas* c2c = new TCanvas(Form("c_ncqpt_%s", cls.c_str()), "NCQ pT", 800, 600);
+    c2c->cd();
+    drawNCQ(f, 0, cls, g);
+    save(c2c, outdir, "NCQ_pT");
+
+    TCanvas* c2d = new TCanvas(Form("c_ncqket_%s", cls.c_str()), "NCQ KET", 800, 600);
+    c2d->cd();
+    drawNCQ(f, 1, cls, g);
+    save(c2d, outdir, "NCQ_KET");
 
     // V2D TPC-FMD1,2 vs pT
     TCanvas* c3 = new TCanvas(Form("c_tpc12_%s", cls.c_str()), "V2D TPC-FMD12", 800, 600);
