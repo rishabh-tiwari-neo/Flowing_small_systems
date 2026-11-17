@@ -1,4 +1,4 @@
-// post_ALICE.cc
+// post.cc
 // Builds per-trigger yields Y(dphi) = S/B projected over deta, then fits them with the template.
 // S and B are 2D (dphi x deta) histograms from gen_ALICE. B is normalised with one constant:
 // its dphi average at the deta bin where B is largest. S is divided by the number of triggers
@@ -37,10 +37,11 @@
 #include "TH2D.h"
 #include "TGraphErrors.h"
 #include "TString.h"
+#include "TSystem.h"
 
 static const int NSP = 5;
 static const char* SP_NAME[NSP] = {"pi", "K", "p", "K0S", "Lam"};
-static const char* DATA_DIR = "data/data_ALICE";
+static std::string DATA_DIR = "data/data_ALICE";   // set in main() from the generator name (ALICE or AMPT)
 static const std::vector<std::string> CLASSES = {"HM", "HM35"};
 
 // kinematic deta = eta_ref - eta_trig (or eta_a - eta_b) ranges, from the acceptance
@@ -168,9 +169,9 @@ static TH2D* getH2(TFile* f, const TString& name) {
 // Each {first, last} is an inclusive range of generator pT bins (0..19) merged into one output bin.
 // An empty list keeps the 20 generator bins unchanged.
 static const std::vector<std::vector<std::pair<int, int>>> REBIN = {
-    /* pi  */ {},
-    /* K   */ {},
-    /* p   */ {},
+    /* pi  */ {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}, {12, 14}, {15, 16}, {17, 18}, {19, 19}},
+    /* K   */ {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}, {12, 14}, {15, 16}, {17, 18}, {19, 19}},
+    /* p   */ {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}, {12, 14}, {15, 16}, {17, 18}, {19, 19}},
     /* K0S */ {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}, {12, 14}, {15, 16}, {17, 18}, {19, 19}},
     /* Lam */ {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}, {12, 14}, {15, 16}, {17, 18}, {19, 19}}
 };
@@ -408,7 +409,11 @@ static int runClass(const std::string& inFile, const std::string& outBase, const
     return 0;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc > 2) { std::cerr << "Usage: " << argv[0] << " [ALICE|AMPT]   (default ALICE)" << std::endl; return 1; }
+    const std::string gen = (argc == 2) ? argv[1] : "ALICE";
+    DATA_DIR = "data/data_" + gen;
+    if (gSystem->AccessPathName(DATA_DIR.c_str())) { std::cerr << "Data folder not found: " << DATA_DIR << std::endl; return 1; }
     TH1::AddDirectory(kFALSE);   // temporary yield histograms stay out of the ROOT directory
     int failed = 0;
     for (const std::string& cls : CLASSES)

@@ -167,13 +167,13 @@ if [ ! -f "$MERGED" ]; then
     exit 1
 fi
 
-echo "Compiling post_ALICE and plot_ALICE..."
-g++ -O2 -o post/post_ALICE post/post_ALICE.cc `root-config --cflags --libs`
+echo "Compiling post and plot..."
+g++ -O2 -o post/post post/post.cc `root-config --cflags --libs`
 if [ $? -ne 0 ]; then
     echo "post_ALICE build failed. Aborting."
     exit 1
 fi
-g++ -O2 -o post/plot_ALICE post/plot_ALICE.cc `root-config --cflags --libs`
+g++ -O2 -o post/plot post/plot.cc `root-config --cflags --libs`
 if [ $? -ne 0 ]; then
     echo "plot_ALICE build failed. Aborting."
     exit 1
@@ -181,14 +181,14 @@ fi
 
 echo ""
 echo "=== Fitting ==="
-./post/post_ALICE 2>&1 | tee "$LOG_DIR/post_all.txt"
+./post/post ALICE 2>&1 | tee "$LOG_DIR/post_all.txt"
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
     echo "post_ALICE failed. Aborting."
     exit 1
 fi
 
 echo "=== Plotting ==="
-./post/plot_ALICE
+./post/plot ALICE
 if [ $? -ne 0 ]; then
     echo "plot_ALICE failed. Aborting."
     exit 1

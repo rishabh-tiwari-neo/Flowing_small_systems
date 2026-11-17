@@ -1,4 +1,4 @@
-// plot_ALICE.cc
+// plot.cc
 // Makes v2sq_vs_pt, v2_vs_pt, V2D_TPC_FMD12, V2D_TPC_FMD3, V2D_FMD12_FMD3,
 // and the NCQ-scaling plots NCQ_pT (v2/nq vs pT/nq) and NCQ_KET (v2/nq vs KET/nq).
 // Everything is read from v2_results_<class>.root (the "v2_<sp>" graphs post_ALICE
@@ -26,8 +26,8 @@
 #include "TLatex.h"
 
 // ---- input / output locations and the classes to plot ----
-static const char* DATA_DIR      = "data/data_ALICE";
-static const char* PLOT_DIR_BASE = "plots/plot_ALICE";
+static std::string DATA_DIR      = "data/data_ALICE";    // set in main() from the generator name (ALICE or AMPT)
+static std::string PLOT_DIR_BASE = "plots/plot_ALICE";
 static const std::vector<std::string> CLASSES = {"HM", "HM35"};
 
 // ---- species: names (must match post_ALICE), legend labels, colours, markers ----
@@ -250,13 +250,13 @@ static bool plotClass(const std::string& cls) {
     // v2^2 vs pT
     TCanvas* c2 = new TCanvas(Form("c_v2sq_%s", cls.c_str()), "v2sq", 800, 600);
     c2->cd();
-    drawPad(f, "v2sq", "v_{2}^{2}", -0.25, 0.25, g);
+    drawPad(f, "v2sq", "v_{2}^{2}", -0.5, 0.5, g);
     save(c2, outdir, "v2sq_vs_pt");
 
     // v2 = sqrt(v2sq) vs pT (always positive -- see the note at the top of this file)
     TCanvas* c2b = new TCanvas(Form("c_v2_%s", cls.c_str()), "v2", 800, 600);
     c2b->cd();
-    drawPad(f, "v2", "v_{2}", 0.0, 0.25, g);
+    drawPad(f, "v2", "v_{2}", 0.0, 1, g);
     save(c2b, outdir, "v2_vs_pt");
 
     // NCQ scaling: v2/nq vs pT/nq and v2/nq vs KET/nq
@@ -295,16 +295,20 @@ static bool plotClass(const std::string& cls) {
 
 int main(int argc, char* argv[]) {
     // ---- arguments and ROOT setup ----
-    if (argc > 2) {
-        std::cerr << "Usage: " << argv[0] << " [class]   (no argument = all classes)" << std::endl;
+    if (argc > 3) {
+        std::cerr << "Usage: " << argv[0] << " [ALICE|AMPT] [class]   (default ALICE, all classes)" << std::endl;
         return 1;
     }
+    const std::string gen = (argc >= 2) ? argv[1] : "ALICE";
+    DATA_DIR      = "data/data_" + gen;
+    PLOT_DIR_BASE = "plots/plot_" + gen;
+    if (gSystem->AccessPathName(DATA_DIR.c_str())) { std::cerr << "Data folder not found: " << DATA_DIR << std::endl; return 1; }
     gROOT->SetBatch(true);
     gStyle->SetOptStat(0);
 
     // ---- which classes to plot: all of them, or the one given on the command line ----
     std::vector<std::string> todo = CLASSES;
-    if (argc == 2) todo = {argv[1]};
+    if (argc == 3) todo = {argv[2]};
 
     // ---- load and plot the classes one by one ----
     int failed = 0;
