@@ -250,13 +250,13 @@ static bool plotClass(const std::string& cls) {
     // v2^2 vs pT
     TCanvas* c2 = new TCanvas(Form("c_v2sq_%s", cls.c_str()), "v2sq", 800, 600);
     c2->cd();
-    drawPad(f, "v2sq", "v_{2}^{2}", -1.0, 1.0, g);
+    drawPad(f, "v2sq", "v_{2}^{2}", -0.25, 0.25, g);
     save(c2, outdir, "v2sq_vs_pt");
 
     // v2 = sqrt(v2sq) vs pT (always positive -- see the note at the top of this file)
     TCanvas* c2b = new TCanvas(Form("c_v2_%s", cls.c_str()), "v2", 800, 600);
     c2b->cd();
-    drawPad(f, "v2", "v_{2}", 0.0, 1, g);
+    drawPad(f, "v2", "v_{2}", 0.0, 0.25, g);
     save(c2b, outdir, "v2_vs_pt");
 
     // NCQ scaling: v2/nq vs pT/nq and v2/nq vs KET/nq

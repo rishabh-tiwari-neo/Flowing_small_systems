@@ -28,7 +28,7 @@ P               ! TARG
 11		! ihjsed: take HIJING seed from below (D=0)or at runtime(11)
 13150909	! random seed for HIJING
 8		! random seed for parton cascade
-1		! flag for K0s weak decays (D=0,no; 1,yes)
+0		! flag for K0s weak decays (D=0,no; 1,yes)
 1		! flag for phi decays at end of hadron cascade (D=1,yes; 0,no)
 0		! flag for pi0 decays at end of hadron cascade (D=0,no; 1,yes)
 0		! optional OSCAR output (D=0,no; 1,yes; 2&3,more parton info)

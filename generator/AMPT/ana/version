@@ -1,0 +1,9 @@
+ 
+           ##################################################
+           #      AMPT (A Multi-Phase Transport) model      #
+           #          Version 2.26t9b (StringMelting)       #
+           #               12/25/2018                       #
+           ##################################################
+            
+ # Read in NSEED in HIJING at run time:       12345
+ # ZPC seed (iseedp):       67890

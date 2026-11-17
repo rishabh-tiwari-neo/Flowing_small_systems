@@ -1,0 +1,5 @@
+Generator: AMPT (converted with histogram_AMPT.cc)
+Class cuts: HM: V0M > 142 and nchCent > 25; HM35: V0M > 72 and nchCent > 25; LM: nchCent < 20
+(PYTHIA/gen_ALICE cuts: HM V0M > 157, HM35 V0M > 45, nchCent > 25, LM nchCent < 20)
+No shoving strength g: AMPT has none, so no TParameter g is written by this program.
+input.ampt: not given (pass its path as the 7th argument to log the AMPT settings)
