@@ -1,0 +1,7 @@
+Info in <hadd>: target file: hist_out/merged.root
+Info in <hadd>: compression setting for all output: 101
+hadd Source file 1: hist_out/core_0.root
+hadd Source file 2: hist_out/core_1.root
+hadd Source file 3: hist_out/core_2.root
+hadd Source file 4: hist_out/core_3.root
+hadd Target path: hist_out/merged.root:/

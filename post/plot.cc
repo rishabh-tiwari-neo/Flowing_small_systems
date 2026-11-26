@@ -213,7 +213,9 @@ static void drawNCQ(TFile* f, int kind, const std::string& cls, double gShove) {
     fr->GetYaxis()->SetTitleOffset(1.9);
     fr->Draw("AXIS");
 
-    TLegend* leg = new TLegend(0.18, gShove >= 0 ? 0.62 : 0.68, 0.45, 0.92);
+    TLegend* leg = new TLegend(gShove >= 0 ? 0.75 : 0.81, gShove >= 0 ? 0.15 : 0.21, 0.99, 0.45);
+
+
     if (gShove >= 0) leg->SetHeader(Form("%s, g = %g", cls.c_str(), gShove));
     else             leg->SetHeader(cls.c_str());
     leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.04); leg->SetMargin(0.30);
@@ -250,13 +252,13 @@ static bool plotClass(const std::string& cls) {
     // v2^2 vs pT
     TCanvas* c2 = new TCanvas(Form("c_v2sq_%s", cls.c_str()), "v2sq", 800, 600);
     c2->cd();
-    drawPad(f, "v2sq", "v_{2}^{2}", -0.5, 0.5, g);
+    drawPad(f, "v2sq", "v_{2}^{2}", -0.05, 1, g);
     save(c2, outdir, "v2sq_vs_pt");
 
     // v2 = sqrt(v2sq) vs pT (always positive -- see the note at the top of this file)
     TCanvas* c2b = new TCanvas(Form("c_v2_%s", cls.c_str()), "v2", 800, 600);
     c2b->cd();
-    drawPad(f, "v2", "v_{2}", 0.0, 1, g);
+    drawPad(f, "v2", "v_{2}", -0.05, 1, g);
     save(c2b, outdir, "v2_vs_pt");
 
     // NCQ scaling: v2/nq vs pT/nq and v2/nq vs KET/nq

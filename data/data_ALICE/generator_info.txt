@@ -1,2 +1,2 @@
-PYTHIA version: 8.316
-Ropewalk:gAmplitude (g): 10
+PYTHIA version: 8.312
+Ropewalk:gAmplitude (g): 12

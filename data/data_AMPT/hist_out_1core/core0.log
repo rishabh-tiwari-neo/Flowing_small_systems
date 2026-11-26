@@ -1,0 +1,4 @@
+[core 0] chain: 1 file(s), 1500000 events; this core: events 0..1499999 (1500000), 2 block(s) of up to 1000000
+[core 0] Wrote hist_out_1core/h_core0_part0.root (block 1/2, chain events 0..999999, registered=965411, HM=715, LM=828776, HM35=49804)
+[core 0] Wrote hist_out_1core/h_core0_part1.root (block 2/2, chain events 1000000..1499999, registered=482504, HM=333, LM=414156, HM35=24942)
+[core 0] finished.

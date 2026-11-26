@@ -1,18 +1,27 @@
-// histogram_AMPT.cc
-// Turns one AMPT tree file (tree "t", from AmptRootIO.cxx) into the same histograms that
-// gen_ALICE.cc writes, with identical names, binning, acceptance windows, class logic,
-// pairing and mixed-event pool, so post_ALICE and plot_ALICE read the output unchanged.
+// Histogram_AMPT_par.cc
+// Parallel version of Histogram_AMPT.cc. Same histograms (names, binning, windows, class logic,
+// pairing, mixed-event pool) -- the physics code below is copied unchanged from Histogram_AMPT.cc.
+//
+// What is new:
+//   * The input is a LIST of AMPT tree files (one path per line), treated as ONE long chain of
+//     events (file 1 first, then file 2, ...). One file in the list also works.
+//   * This process is "core <core> of <ncores>". The chain is cut into <ncores> contiguous event
+//     ranges whose sizes differ by at most 1 event, with no overlap and no gap:
+//         first = N * core / ncores,   last = N * (core + 1) / ncores
+//   * Inside its range the process works in blocks of <chunk_events> (default 1000000), exactly like
+//     Histogram_AMPT.cc: every block has its own histograms and its own (empty) mixed-event pool,
+//     and is written to its own file <outprefix>_core<c>_part<k>.root.
+//   * generator_info.txt is written by core 0 only (no clash between processes).
+//   * The "events AMPT did not write" count (tEvents) is added once, in block 0 of core 0.
 //
 // Usage:
-//   histogram_AMPT <input_tree.root> <output.root> [V0M_HM_MIN] [V0M_HM35_MIN] [NCH_HM_MIN] [NCH_LM_MAX] [input.ampt]
-// Defaults (AMPT, from the 1.5M-event scan of the current input.ampt):
-//   V0M_HM_MIN = 142, V0M_HM35_MIN = 72, NCH_HM_MIN = 25, NCH_LM_MAX = 20
-// (gen_ALICE/PYTHIA uses 157, 45, 25, 20.)
-// A class cut is "V0M > V0M_*_MIN" and "nchCent > NCH_HM_MIN", exactly as in gen_ALICE.
-// Mixed events are formed within this one input file (one shard).
-// Writes generator_info.txt next to the output file.
+//   Histogram_AMPT_par <core> <ncores> <filelist.txt> <outprefix>
+//                      [V0M_HM_MIN] [V0M_HM35_MIN] [NCH_HM_MIN] [NCH_LM_MAX] [input.ampt] [chunk_events]
+// Defaults: V0M_HM_MIN = 142, V0M_HM35_MIN = 72, NCH_HM_MIN = 25, NCH_LM_MAX = 20, chunk_events = 1000000
+// (chunk_events = 0: the whole range of this core is one block, i.e. one pool).
+// <outprefix> is a path prefix, e.g. hist_out/h  ->  hist_out/h_core3_part0.root
 //
-// Build: g++ -O2 -o histogram_AMPT histogram_AMPT.cc `root-config --cflags --libs`
+// Build: g++ -O2 -o Histogram_AMPT_par Histogram_AMPT_par.cc `root-config --cflags --libs`
 
 #include <iostream>
 #include <fstream>
@@ -24,7 +33,7 @@
 #include <deque>
 #include <string>
 #include "TFile.h"
-#include "TTree.h"
+#include "TChain.h"
 #include "TNamed.h"
 #include "TH1D.h"
 #include "TH2D.h"
@@ -119,82 +128,13 @@ static int   gNtrack;
 static int   gPID[kMaxTracks], gCharge[kMaxTracks];
 static float gPx[kMaxTracks], gPy[kMaxTracks], gPz[kMaxTracks], gE[kMaxTracks];
 
-int main(int argc, char* argv[]) {
-
-    if (argc < 3 || argc > 9) {
-        std::cerr << "Usage: " << argv[0]
-                  << " <input_tree.root> <output.root> [V0M_HM_MIN] [V0M_HM35_MIN] [NCH_HM_MIN] [NCH_LM_MAX] [input.ampt] [chunk_events]"
-                  << std::endl;
-        return 1;
-    }
-    long chunk = 1000000;                       // events per block (0 = whole file in one block)
-    if (argc > 8) chunk = std::atol(argv[8]);
-    const std::string inFile  = argv[1];
-    const std::string outFile = argv[2];
-    if (argc > 3) V0M_HM_MIN   = std::atoi(argv[3]);
-    if (argc > 4) V0M_HM35_MIN = std::atoi(argv[4]);
-    if (argc > 5) NCH_HM_MIN   = std::atoi(argv[5]);
-    if (argc > 6) NCH_LM_MAX   = std::atoi(argv[6]);
-    const std::string inputAmpt = (argc > 7) ? argv[7] : "";
-
-    TH1::AddDirectory(kFALSE);   // histograms are written explicitly, not owned by the input file
-
-    // ---- generator_info.txt next to the output file (same content for every shard) ----
-    {
-        const size_t slash = outFile.find_last_of('/');
-        const std::string dir = (slash == std::string::npos) ? "." : outFile.substr(0, slash);
-        std::ofstream info(dir + "/generator_info.txt", std::ios::trunc);
-        info << "Generator: AMPT (converted with histogram_AMPT.cc)\n"
-             << "Class cuts: HM: V0M > " << V0M_HM_MIN << " and nchCent > " << NCH_HM_MIN
-             << "; HM35: V0M > " << V0M_HM35_MIN << " and nchCent > " << NCH_HM_MIN
-             << "; LM: nchCent < " << NCH_LM_MAX << "\n"
-             << "(PYTHIA/gen_ALICE cuts: HM V0M > 157, HM35 V0M > 45, nchCent > 25, LM nchCent < 20)\n"
-             << "No shoving strength g: AMPT has none, so no TParameter g is written by this program.\n";
-        if (!inputAmpt.empty()) {
-            std::ifstream in(inputAmpt);
-            if (!in) {
-                info << "input.ampt: could not open " << inputAmpt << "\n";
-            } else {
-                info << "input.ampt (" << inputAmpt << "):\n";
-                std::string line;
-                while (std::getline(in, line)) info << "  " << line << "\n";
-            }
-        } else {
-            info << "input.ampt: not given (pass its path as the 7th argument to log the AMPT settings)\n";
-        }
-    }
-
-    // ---- input tree ----
-    TFile* fin = TFile::Open(inFile.c_str(), "READ");
-    if (!fin || fin->IsZombie()) { std::cerr << "Cannot open " << inFile << std::endl; return 1; }
-    TTree* tree = dynamic_cast<TTree*>(fin->Get("t"));
-    if (!tree) { std::cerr << "No tree 't' in " << inFile << std::endl; return 1; }
-
-    tree->SetBranchStatus("*", 0);
-    for (const char* b : {"ntrack", "PID", "charge", "px", "py", "pz", "energy"}) tree->SetBranchStatus(b, 1);
-    tree->SetBranchAddress("ntrack", &gNtrack);
-    tree->SetBranchAddress("PID",    gPID);
-    tree->SetBranchAddress("charge", gCharge);
-    tree->SetBranchAddress("px",     gPx);
-    tree->SetBranchAddress("py",     gPy);
-    tree->SetBranchAddress("pz",     gPz);
-    tree->SetBranchAddress("energy", gE);
-    const long n_total = tree->GetEntries();
-    if (chunk <= 0 || chunk > n_total) chunk = n_total;
-    const long nChunks = (n_total + chunk - 1) / chunk;
-
-    // events AMPT did not write (no final-state particles) still count as generated
-    long long nNotWritten = 0;
-    if (TNamed* te = dynamic_cast<TNamed*>(fin->Get("tEvents"))) {
-        long long a = 0, b = 0;
-        if (std::sscanf(te->GetTitle(), "written %lld, not written: no particles %lld", &a, &b) == 2) nNotWritten = b;
-    }
-
-    // ---- one block of 'chunk' events at a time: own histograms, own mixed-event pool, own output file ----
-    for (long part = 0; part < nChunks; ++part) {
-    const long first = part * chunk;
-    const long last  = std::min(first + chunk, n_total);
-
+// ------------------------------------------------------------------------------------------
+// One block = events [first, last) of the chain: own histograms, own pool, own output file.
+// Body is the block body of Histogram_AMPT.cc (only the event access and the printout differ).
+// ------------------------------------------------------------------------------------------
+static bool runBlock(TChain& chain, long long first, long long last, const std::string& outName,
+                     long long nNotWritten, int core, int part, int nBlocks)
+{
     // ---- histograms and counters (same names and binning as gen_ALICE.cc) ----
     TH2D* hID[NCLS][NSP][NpT_bins][NIDPAIR];
     TH2D* hIDmix[NCLS][NSP][NpT_bins][NIDPAIR];
@@ -246,17 +186,20 @@ int main(int argc, char* argv[]) {
                                  301, -0.5, 300.5);
     }
 
-    // events AMPT did not write count as generated (never registered)
-    if (part == 0) for (long long k = 0; k < nNotWritten; ++k) hCounter->Fill(1);
+    // events AMPT did not write count as generated (never registered); added once, in block 0 of core 0
+    for (long long k = 0; k < nNotWritten; ++k) hCounter->Fill(1);
 
     // ---- event loop ----
     std::vector<Trig> trig;
     std::vector<Ref>  f12, f3;
     std::deque<PooledEvent> pool[NCLS];
 
-    for (long i = first; i < last; ++i) {
+    for (long long i = first; i < last; ++i) {
 
-        tree->GetEntry(i);
+        if (chain.GetEntry(i) <= 0) {
+            std::cerr << "ERROR: could not read event " << i << " of the chain" << std::endl;
+            return false;
+        }
         hCounter->Fill(1);
 
         trig.clear(); f12.clear(); f3.clear();
@@ -363,15 +306,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // ---- write (one file per block: <output>_part<k>.root; a single block keeps the plain name) ----
-    std::string outName = outFile;
-    if (nChunks > 1) {
-        const size_t dot = outFile.rfind(".root");
-        const std::string base = (dot == std::string::npos) ? outFile : outFile.substr(0, dot);
-        outName = base + "_part" + std::to_string(part) + ".root";
-    }
+    // ---- write ----
     TFile* fout = new TFile(outName.c_str(), "RECREATE");
-    if (!fout || fout->IsZombie()) { std::cerr << "Cannot create " << outName << std::endl; return 1; }
+    if (!fout || fout->IsZombie()) { std::cerr << "Cannot create " << outName << std::endl; return false; }
     for (int c = 0; c < NCLS; ++c) {
         for (int s = 0; s < NSP; ++s) {
             hNtrig[c][s]->Write();
@@ -390,9 +327,9 @@ int main(int argc, char* argv[]) {
     hNchV0M->Write();
     fout->Close();
 
-    std::cout << "Done. Wrote " << outName
-              << " (block " << (part + 1) << "/" << nChunks
-              << ", events=" << ((last - first) + (part == 0 ? nNotWritten : 0))
+    std::cout << "[core " << core << "] Wrote " << outName
+              << " (block " << (part + 1) << "/" << nBlocks
+              << ", chain events " << first << ".." << (last - 1)
               << ", registered=" << hCounter->GetBinContent(2)
               << ", HM=" << hEvents[HM]->GetEntries()
               << ", LM=" << hEvents[LM]->GetEntries()
@@ -411,8 +348,141 @@ int main(int argc, char* argv[]) {
     }
     delete hCounter; delete hNchCent; delete hNchV0M;
     delete fout;
-    }   // end of block loop
+    return true;
+}
 
-    fin->Close();
+// removes spaces, tabs and CR/LF at both ends of a line of the file list
+static std::string trimmed(const std::string& s) {
+    const char* ws = " \t\r\n";
+    const size_t a = s.find_first_not_of(ws);
+    if (a == std::string::npos) return "";
+    const size_t b = s.find_last_not_of(ws);
+    return s.substr(a, b - a + 1);
+}
+
+int main(int argc, char* argv[]) {
+
+    if (argc < 5 || argc > 11) {
+        std::cerr << "Usage: " << argv[0]
+                  << " <core> <ncores> <filelist.txt> <outprefix> [V0M_HM_MIN] [V0M_HM35_MIN] [NCH_HM_MIN] [NCH_LM_MAX] [input.ampt] [chunk_events]"
+                  << std::endl;
+        return 1;
+    }
+    const int core   = std::atoi(argv[1]);
+    const int ncores = std::atoi(argv[2]);
+    if (ncores < 1 || core < 0 || core >= ncores) {
+        std::cerr << "Need 0 <= core < ncores (got core=" << core << ", ncores=" << ncores << ")" << std::endl;
+        return 1;
+    }
+    const std::string listFile  = argv[3];
+    const std::string outPrefix = argv[4];
+    if (argc > 5) V0M_HM_MIN   = std::atoi(argv[5]);
+    if (argc > 6) V0M_HM35_MIN = std::atoi(argv[6]);
+    if (argc > 7) NCH_HM_MIN   = std::atoi(argv[7]);
+    if (argc > 8) NCH_LM_MAX   = std::atoi(argv[8]);
+    const std::string inputAmpt = (argc > 9) ? argv[9] : "";
+    long long chunk = 1000000;                       // events per block (0 = whole range of this core in one block)
+    if (argc > 10) chunk = std::atoll(argv[10]);
+
+    TH1::AddDirectory(kFALSE);   // histograms are written explicitly, not owned by the input file
+
+    // ---- file list ----
+    std::vector<std::string> files;
+    {
+        std::ifstream in(listFile);
+        if (!in) { std::cerr << "Cannot open file list " << listFile << std::endl; return 1; }
+        std::string line;
+        while (std::getline(in, line)) {
+            line = trimmed(line);
+            if (line.empty() || line[0] == '#') continue;
+            files.push_back(line);
+        }
+    }
+    if (files.empty()) { std::cerr << "File list " << listFile << " is empty" << std::endl; return 1; }
+
+    // ---- one chain over all files; only the 7 needed branches are read ----
+    TChain chain("t");
+    for (const std::string& f : files) {
+        if (chain.Add(f.c_str()) == 0) { std::cerr << "Cannot use " << f << " (missing, or no tree 't')" << std::endl; return 1; }
+    }
+    chain.SetBranchStatus("*", 0);
+    for (const char* b : {"ntrack", "PID", "charge", "px", "py", "pz", "energy"}) chain.SetBranchStatus(b, 1);
+    chain.SetBranchAddress("ntrack", &gNtrack);
+    chain.SetBranchAddress("PID",    gPID);
+    chain.SetBranchAddress("charge", gCharge);
+    chain.SetBranchAddress("px",     gPx);
+    chain.SetBranchAddress("py",     gPy);
+    chain.SetBranchAddress("pz",     gPz);
+    chain.SetBranchAddress("energy", gE);
+
+    const long long nTotal = chain.GetEntries();
+    if (nTotal < ncores) {
+        std::cerr << "Only " << nTotal << " events for " << ncores << " cores; use fewer cores." << std::endl;
+        return 1;
+    }
+
+    // ---- this core's range (contiguous, no overlap, sizes differ by at most 1) ----
+    const long long first0 = nTotal * core / ncores;
+    const long long last0  = nTotal * (core + 1) / ncores;
+    const long long len    = last0 - first0;
+    if (chunk <= 0 || chunk > len) chunk = len;
+    const int nBlocks = (int)((len + chunk - 1) / chunk);
+
+    std::cout << "[core " << core << "] chain: " << files.size() << " file(s), " << nTotal
+              << " events; this core: events " << first0 << ".." << (last0 - 1)
+              << " (" << len << "), " << nBlocks << " block(s) of up to " << chunk << std::endl;
+
+    // ---- core 0 only: generator_info.txt and the "not written" count of all files ----
+    long long nNotWritten = 0;
+    if (core == 0) {
+        for (const std::string& f : files) {
+            TFile* ft = TFile::Open(f.c_str(), "READ");
+            if (!ft || ft->IsZombie()) { std::cerr << "Cannot open " << f << std::endl; return 1; }
+            if (TNamed* te = dynamic_cast<TNamed*>(ft->Get("tEvents"))) {
+                long long a = 0, b = 0;
+                if (std::sscanf(te->GetTitle(), "written %lld, not written: no particles %lld", &a, &b) == 2) nNotWritten += b;
+            }
+            ft->Close();
+            delete ft;
+        }
+
+        const size_t slash = outPrefix.find_last_of('/');
+        const std::string dir = (slash == std::string::npos) ? "." : outPrefix.substr(0, slash);
+        std::ofstream info(dir + "/generator_info.txt", std::ios::trunc);
+        info << "Generator: AMPT (converted with Histogram_AMPT_par.cc)\n"
+             << "Class cuts: HM: V0M > " << V0M_HM_MIN << " and nchCent > " << NCH_HM_MIN
+             << "; HM35: V0M > " << V0M_HM35_MIN << " and nchCent > " << NCH_HM_MIN
+             << "; LM: nchCent < " << NCH_LM_MAX << "\n"
+             << "(PYTHIA/gen_ALICE cuts: HM V0M > 157, HM35 V0M > 45, nchCent > 25, LM nchCent < 20)\n"
+             << "No shoving strength g: AMPT has none, so no TParameter g is written by this program.\n";
+        if (!inputAmpt.empty()) {
+            std::ifstream in(inputAmpt);
+            if (!in) {
+                info << "input.ampt: could not open " << inputAmpt << "\n";
+            } else {
+                info << "input.ampt (" << inputAmpt << "):\n";
+                std::string line;
+                while (std::getline(in, line)) info << "  " << line << "\n";
+            }
+        } else {
+            info << "input.ampt: not given (pass its path as the 9th argument to log the AMPT settings)\n";
+        }
+        info << "Input: " << files.size() << " tree file(s), " << nTotal << " events in the tree";
+        if (nNotWritten > 0) info << " (+" << nNotWritten << " events AMPT did not write)";
+        info << "\nParallel conversion: " << ncores << " core(s), blocks of up to " << chunk
+             << " events, one mixed-event pool per block.\n";
+    }
+
+    // ---- blocks of this core ----
+    for (int part = 0; part < nBlocks; ++part) {
+        const long long first = first0 + (long long)part * chunk;
+        const long long last  = std::min(first + chunk, last0);
+        const std::string outName = outPrefix + "_core" + std::to_string(core)
+                                  + "_part" + std::to_string(part) + ".root";
+        const long long addNW = (core == 0 && part == 0) ? nNotWritten : 0;
+        if (!runBlock(chain, first, last, outName, addNW, core, part, nBlocks)) return 1;
+    }
+
+    std::cout << "[core " << core << "] finished." << std::endl;
     return 0;
 }
