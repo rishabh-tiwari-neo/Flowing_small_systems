@@ -1,6 +1,6 @@
 # Long-range correlations and flow signatures in small systems
 
-Welcome! This study is on long-range correlations and flow signatures in small systems (pp collisions at 13 TeV) using PYTHIA8 with string shoving and rope hadronisation. It follows the analysis strategy of the ALICE papers on ultra-long-range correlations and partonic flow.
+Welcome! This study is on long-range correlations and flow signatures in small systems (pp collisions at 13 TeV) using PYTHIA8 with string shoving and rope hadronisation. It follows the analysis strategy of the ALICE papers on ultra-long-range correlations and partonic flow. The same post-processing also runs on AMPT output (see section 7).
 
 ## Layout
 
@@ -15,10 +15,11 @@ main/
 ├── post/
 │   ├── analyser_ALICE.cc   # Prints event, multiplicity and trigger statistics of a merged ALICE file (used pre-run again)
 │   ├── analyser.cc         # Same kind of pre-run stats, for the separate nchnmpi study (see data/data_nchnmpi below)
-│   ├── post_ALICE.cc       # Template fit, V2Delta extraction, 3x2PC combination -> v2(pT) and plain v2
-│   └── plot_ALICE.cc       # Makes all plots, including v2 and the NCQ-scaling plots, from the post-processing output
+│   ├── post.cc             # Template fit, V2Delta extraction, 3x2PC combination -> v2(pT) and plain v2 (run: ./post/post ALICE|AMPT)
+│   └── plot.cc             # Makes all plots, including v2 and the NCQ-scaling plots, from the post-processing output (run: ./post/plot ALICE|AMPT)
 ├── data/
-│   ├── data_ALICE/         # ROOT files and v2_results_<class>.{root,csv} from gen_ALICE + post_ALICE
+│   ├── data_ALICE/         # ROOT files and v2_results_<class>.{root,csv} from gen_ALICE + post
+│   ├── data_AMPT/          # AMPT tree file(s), Histogram_AMPT.cc, merged.root, generator_info.txt and v2_results_<class>.{root,csv} (see section 7)
 │   ├── data_nchnmpi/       # Output of the separate nchnmpi study
 │   └── test_run/           # Small test-run output, incl. proton_stats.C
 ├── logs/
@@ -28,6 +29,8 @@ main/
 ├── plots/
 │   ├── plot_ALICE_HM/      # Finished HM-class plots (PDF and PNG)
 │   ├── plot_ALICE_HM35/    # Finished HM35-class plots (PDF and PNG)
+│   ├── plot_AMPT_HM/       # Same plots for AMPT, HM class
+│   ├── plot_AMPT_HM35/     # Same plots for AMPT, HM35 class
 │   └── plot_nchnmpi/       # Plots for the nchnmpi study
 └── Readme.md               # You are here
 ```
@@ -61,17 +64,17 @@ Note: `diag_ALICE.cc`, `dphi_ALICE.cc` and `slices_ALICE.cc` (the diagnostic too
 ## What the post-processing does
 
 - `analyser_ALICE`: prints event counts, class fractions (HM, LM, HM35), mean multiplicities per class, trigger yields, and same-event and mixed-event pair counts of a merged `gen_ALICE` file. The pT bins are read from the file. Again for testing and stats. 
-- `post_ALICE`: for each class (HM, HM35), pairing, species and pT bin, builds the per-trigger yield Y(Delta-phi) = S/B (see Methodology), fits it with the LM template (template fit: weighted linear least squares, errors from the fit covariance matrix), and extracts V2Delta. The three pairings are then combined (3x2PC):
+- `post`: for each class (HM, HM35), pairing, species and pT bin, builds the per-trigger yield Y(Delta-phi) = S/B (see Methodology), fits it with the LM template (template fit: weighted linear least squares, errors from the fit covariance matrix), and extracts V2Delta. The three pairings are then combined (3x2PC):
   - v2^2 = V2D(TPC-FMD1,2) x V2D(TPC-FMD3) / V2D(FMD1,2-FMD3), keeping the sign. No square root is taken, since v2^2 can come out negative when the combination fails.
   - plain v2 = sqrt(v2^2) is also written, defined only where v2^2 > 0. v2 is always positive, so it loses the sign of the underlying V2Delta — see Methodology, point 7.
-  Any species can be analysed in coarser pT bins via the `REBIN` table in `post_ALICE.cc` (one entry per species, each an inclusive range of generator pT-bin indices to merge; an empty entry keeps the 20 generator bins). By default K0S and Lambda are merged into 0.5-0.8, 0.8-1.25, 1.25-1.75, 1.75-2.25, 2.25-2.75, 2.75-3.25, 3.25-4.0, 4.0-5.0, 5.0-6.0, 6.0-10 GeV/c, since they are sparse; pi, K and p keep the 20 generator bins by default. The merging sums the 2D S and B histograms and the trigger counts over the grouped generator bins before the S/B division, for both the class and the LM template.
+  Any species can be analysed in coarser pT bins via the `REBIN` table in `post.cc` (one entry per species, each an inclusive range of generator pT-bin indices to merge; an empty entry keeps the 20 generator bins). By default K0S and Lambda are merged into 0.5-0.8, 0.8-1.25, 1.25-1.75, 1.75-2.25, 2.25-2.75, 2.75-3.25, 3.25-4.0, 4.0-5.0, 5.0-6.0, 6.0-10 GeV/c, since they are sparse; pi, K and p keep the 20 generator bins by default. The merging sums the 2D S and B histograms and the trigger counts over the grouped generator bins before the S/B division, for both the class and the LM template.
   Each of the three pairings also sums Delta-eta only over its own kinematically-correct window (see Methodology, point 6), not the full 1.1-6.4 generator axis.
   Output per class: a ROOT file (V2Delta, v2^2 and v2 as TGraphErrors, one per species and pairing) and a CSV file (same numbers, plus the Delta-eta windows used, recorded as `#` header lines).
-- `plot_ALICE`: for each class makes seven plots (PDF and PNG), all from `v2_results_<class>.root`, in one call — no separate tool needed:
+- `plot`: for each class makes seven plots (PDF and PNG), all from `v2_results_<class>.root`, in one call — no separate tool needed:
   - `v2sq_vs_pt`, `v2_vs_pt`: v2^2 and plain v2 vs pT, all species.
   - `V2D_TPC_FMD12`, `V2D_TPC_FMD3`: the two pT-dependent pairings, all species.
   - `V2D_FMD12_FMD3`: the single reference point.
-  - `NCQ_pT`, `NCQ_KET`: number-of-constituent-quark scaling, v2/nq vs pT/nq and v2/nq vs KET/nq (KET = sqrt(pT^2+m^2) - m), with nq = 2 for mesons (pi, K, K0S) and 3 for baryons (p, Lambda). Built from the `v2_<sp>` graphs `post_ALICE` writes. Points are kept only if v2/err(v2) exceeds `MIN_SIG_V2` in `plot_ALICE.cc` (default 4). Since v2 is always positive (see above), these two plots lose the sign of V2Delta the same way `v2_vs_pt` does.
+  - `NCQ_pT`, `NCQ_KET`: number-of-constituent-quark scaling, v2/nq vs pT/nq and v2/nq vs KET/nq (KET = sqrt(pT^2+m^2) - m), with nq = 2 for mesons (pi, K, K0S) and 3 for baryons (p, Lambda). Built from the `v2_<sp>` graphs `post` writes. Points are kept only if v2/err(v2) exceeds `MIN_SIG_V2` in `plot.cc` (default 4). Since v2 is always positive (see above), these two plots lose the sign of V2Delta the same way `v2_vs_pt` does.
 - `diag_ALICE`, `dphi_ALICE`, `slices_ALICE`: diagnostic tools, not part of the normal pipeline. See "Diagnosing a bad or noisy fit" below.
 
 ## Methodology
@@ -82,8 +85,8 @@ This follows the ALICE papers (arXiv:2504.02359 and the Nature Commun. partonic-
 2. **Per-trigger yield.** S is divided by the number of triggers: identified particles in the pT bin for TPC pairings, FMD1,2 particles for FMD1,2-FMD3. S/B is summed over Delta-eta (1.1 to 6.4) to give Y(Delta-phi), with B's statistical error included. No unit-area normalisation is applied.
 3. **Template fit.** Y_HM(Delta-phi) = F x Y_LM(Delta-phi) + G x [1 + 2 V2D cos(2 Delta-phi) + 2 V3D cos(3 Delta-phi)], with F and G free. The LM class (nchCent < 20) is processed with the same S/B steps and acts as the non-flow template. V2Delta comes from a2/(2G); the error from the covariance of the linear least-squares fit.
 4. **Three-subevent combination (3x2PC).** v2^2 = V2D(TPC-FMD1,2) x V2D(TPC-FMD3) / V2D(FMD1,2-FMD3).
-5. **pT merging.** S and B are summed over the merged generator pT bins (with the trigger counts) before the division, for the HM class and for the LM template alike. By default this applies to K0S and Lambda only; any species can be merged via the `REBIN` table in `post_ALICE.cc`.
-6. **Selection differences from ALICE.** HM is the top 0.07% of V0M with nchCent > 25 (mean nchCent about 54 here, against about 35 in ALICE). HM35 relaxes V0M so the mean is about 35; it is a different selection from ALICE's 0.07%. `gen_ALICE.cc` fills all three pairings into the same 1.1-6.4 Delta-eta axis, wider than the paper's 5.0-6.0 for the FMD pair, but the three pairings do not all cover 1.1-6.4 kinematically: TPC-FMD1,2 reaches 0.9-5.9, TPC-FMD3 reaches 0.9-3.9, and FMD1,2-FMD3 reaches 3.4-8.2 (from the trigger |eta|<0.8, FMD1,2 1.7-5.1 and FMD3 -3.1 to -1.7 acceptances). Outside its own range a pairing's Delta-eta slice is exactly empty, but just inside the edge the number of (eta_trig, eta_ref) combinations that can reach a Delta-eta that close to the kinematic boundary tapers toward zero, so a few slices there can have only a handful of raw pairs even with very high total statistics. Because the per-slice variance scales like 1/B^4, those thin edge slices can dominate a point's error or make F (the template scale) and a2 (the cos(2 Delta-phi) amplitude) indistinguishable in the fit (seen as a large |correlation coefficient rho| in `diag_ALICE`), which inflates the error and destabilises the central value — this hit K0S and Lambda hardest, at high pT, in the TPC-FMD3 pairing specifically. `post_ALICE.cc` now sums each pairing only over its own kinematic Delta-eta window, trimmed `DETA_EDGE_MARGIN` (default 0.4) off each edge to stay clear of the taper. Confirmed by running the fit before and after: the affected K0S/Lambda high-pT bins went from large, sign-flipping, or order-of-magnitude-outlier V2Delta values (and |rho| up to about 0.96) to smooth, small-error values consistent with their neighbours.
+5. **pT merging.** S and B are summed over the merged generator pT bins (with the trigger counts) before the division, for the HM class and for the LM template alike. By default this applies to K0S and Lambda only; any species can be merged via the `REBIN` table in `post.cc`.
+6. **Selection differences from ALICE.** HM is the top 0.07% of V0M with nchCent > 25 (mean nchCent about 54 here, against about 35 in ALICE). HM35 relaxes V0M so the mean is about 35; it is a different selection from ALICE's 0.07%. `gen_ALICE.cc` fills all three pairings into the same 1.1-6.4 Delta-eta axis, wider than the paper's 5.0-6.0 for the FMD pair, but the three pairings do not all cover 1.1-6.4 kinematically: TPC-FMD1,2 reaches 0.9-5.9, TPC-FMD3 reaches 0.9-3.9, and FMD1,2-FMD3 reaches 3.4-8.2 (from the trigger |eta|<0.8, FMD1,2 1.7-5.1 and FMD3 -3.1 to -1.7 acceptances). Outside its own range a pairing's Delta-eta slice is exactly empty, but just inside the edge the number of (eta_trig, eta_ref) combinations that can reach a Delta-eta that close to the kinematic boundary tapers toward zero, so a few slices there can have only a handful of raw pairs even with very high total statistics. Because the per-slice variance scales like 1/B^4, those thin edge slices can dominate a point's error or make F (the template scale) and a2 (the cos(2 Delta-phi) amplitude) indistinguishable in the fit (seen as a large |correlation coefficient rho| in `diag_ALICE`), which inflates the error and destabilises the central value — this hit K0S and Lambda hardest, at high pT, in the TPC-FMD3 pairing specifically. `post.cc` now sums each pairing only over its own kinematic Delta-eta window, trimmed `DETA_EDGE_MARGIN` (default 0.4) off each edge to stay clear of the taper. Confirmed by running the fit before and after: the affected K0S/Lambda high-pT bins went from large, sign-flipping, or order-of-magnitude-outlier V2Delta values (and |rho| up to about 0.96) to smooth, small-error values consistent with their neighbours.
 7. **Sign of V2Delta.** With shoving on and this g, V2Delta(TPC-FMD1,2) and V2Delta(TPC-FMD3) come out negative for every species once the deta-window fix above is applied, growing smoothly in magnitude with pT. This is consistent with string shoving's expected negative elliptic flow (repulsion pushes along the major axis of the initial geometry, the opposite of hydrodynamic flow) noted in the ALICE partonic-flow paper and in Ortiz, Sahu and Bencedi. v2^2 (point 4) is positive because two negative numbers divide by a positive V2Delta(FMD1,2-FMD3) in this class — so v2 = sqrt(v2^2), as plotted in `v2_vs_pt`, `NCQ_pT` and `NCQ_KET`, loses this sign and can look like ordinary positive flow. Check the signed V2Delta directly (`V2D_TPC_FMD12`/`V2D_TPC_FMD3`, or the CSV columns) before drawing conclusions from v2^2 or v2 alone. A Monash run with shoving off, through the same pipeline, is the direct test of whether this negative signal is shoving-driven: V2Delta should collapse to about zero there if so.
 
 ## User manual
@@ -108,9 +111,9 @@ The script:
 1. compiles `generator/gen_ALICE.cc`,
 2. launches the parallel tasks with distinct seeds (saved in `logs/log_ALICE/seeds.log`) and shows a progress bar per task,
 3. merges the task files with `hadd` into `data/data_ALICE/merged.root` (stops if the merge fails),
-4. recompiles `post_ALICE` and `plot_ALICE`,
-5. runs `post_ALICE` (HM and HM35) and saves the printed fit tables to `logs/log_ALICE/post_all.txt`,
-6. runs `plot_ALICE` (HM and HM35).
+4. recompiles `post` and `plot` (as `post/post` and `post/plot`),
+5. runs `post ALICE` (HM and HM35) and saves the printed fit tables to `logs/log_ALICE/post_all.txt`,
+6. runs `plot ALICE` (HM and HM35).
 
 Settings at the top of `run_ALICE.sh`:
 
@@ -121,30 +124,34 @@ Note: a new run writes into the output folder and removes the old task output th
 
 ### 3. Run the post-processing by hand
 
-Compile (first time, or after editing the programs):
+`post` and `plot` take the generator name, `ALICE` (PYTHIA) or `AMPT`. The name selects the data folder `data/data_<NAME>` and the plot folder `plots/plot_<NAME>_<class>`. With no argument the default is `ALICE`. If `data/data_<NAME>` does not exist, the program prints "Data folder not found: ..." and stops.
 
-In the main folder run
-```
-make 
-```
-
-Run from the project root, no arguments needed:
+Compile (first time, or after editing the programs), from the project root:
 
 ```
-./post/post_ALICE         # fits HM and HM35 from data/data_ALICE/merged.root
-./post/plot_ALICE         # makes all seven plots (incl. v2 and NCQ scaling) for HM and HM35
-./post/plot_ALICE HM35    # plots one class only
+g++ -O2 -o post/post post/post.cc `root-config --cflags --libs`
+g++ -O2 -o post/plot post/plot.cc `root-config --cflags --libs`
 ```
 
-Files and folders used (set as constants at the top of the programs):
+Run from the project root:
 
-- `post_ALICE` reads `data/data_ALICE/merged.root` and writes `data/data_ALICE/v2_results_<class>.root` and `.csv`.
-- `plot_ALICE` reads `data/data_ALICE/v2_results_<class>.root` and writes into `plots/plot_ALICE_<class>/` (the folder is created if missing).
-- The class list (HM, HM35) is defined in both `post_ALICE.cc` and `plot_ALICE.cc`; add a class in both.
+```
+./post/post ALICE         # fits HM and HM35 from data/data_ALICE/merged.root
+./post/plot ALICE         # makes all seven plots (incl. v2 and NCQ scaling) for HM and HM35
+./post/plot ALICE HM35    # plots one class only
+./post/post AMPT          # same for AMPT: data/data_AMPT/merged.root
+./post/plot AMPT          # plots go to plots/plot_AMPT_HM and plots/plot_AMPT_HM35
+```
+
+Files and folders used:
+
+- `post` reads `data/data_<NAME>/merged.root` and `generator_info.txt` and writes `data/data_<NAME>/v2_results_<class>.root` and `.csv`.
+- `plot` reads `data/data_<NAME>/v2_results_<class>.root` and writes into `plots/plot_<NAME>_<class>/` (the folder is created if missing). The shoving strength g is read from `merged.root`; without it (AMPT) the legend has no g.
+- The class list (HM, HM35) is defined in both `post.cc` and `plot.cc`; add a class in both.
 
 ### 3b. Diagnosing a bad or noisy fit
 
-If a bin's V2Delta looks like an outlier (large error, sign flip, or a value far from its neighbours), these three tools look inside the fit that produced it. None of them are part of the normal pipeline; build and run them individually, same pattern as `post_ALICE`:
+If a bin's V2Delta looks like an outlier (large error, sign flip, or a value far from its neighbours), these three tools look inside the fit that produced it. None of them are part of the normal pipeline; build and run them individually, same pattern as `post`:
 
 ```
 ./post/diag_ALICE                                    # per class/species/bin: nTrig, nTrigLM, npts, chi2/ndf, rho (F-a2 correlation), both V2Delta
@@ -154,7 +161,7 @@ If a bin's V2Delta looks like an outlier (large error, sign flip, or a value far
 
 `<b0> <b1>` are inclusive generator pT-bin indices (0-19); `[pairing]` is `TPC_FMD12` (default) or `TPC_FMD3`. A large `|rho|` (close to +-1) means the fit cannot separate the template scale from the flow amplitude in that bin; a high chi2/ndf with small `|rho|` means the template simply does not describe the shape there. `slices_ALICE`'s `worst%` column shows whether a single thin deta slice is driving a point's error — this is what the Delta-eta-window fix (Methodology, point 6) addresses.
 
-Both `diag_ALICE.cc` and `post_ALICE.cc` must be kept in sync by hand for the `REBIN` table and the per-pairing Delta-eta windows, since `diag_ALICE` is a standalone copy, not a shared include.
+Both `diag_ALICE.cc` and `post.cc` must be kept in sync by hand for the `REBIN` table and the per-pairing Delta-eta windows, since `diag_ALICE` is a standalone copy, not a shared include.
 
 ### 4. Monitoring a run
 
@@ -168,12 +175,44 @@ Both `diag_ALICE.cc` and `post_ALICE.cc` must be kept in sync by hand for the `R
 ### 6. Things to keep in mind
 
 - Record the PYTHIA version used for each run (the build prints it). Results from different versions (for example 8.312, 8.316, 8.317) can differ slightly even with the same seeds.
-- Output files from before the mixed-event step (1D Delta-phi histograms) are not compatible with the current `post_ALICE`, and old and new files cannot be merged.
+- Output files from before the mixed-event step (1D Delta-phi histograms) are not compatible with the current `post`, and old and new files cannot be merged.
 - The mixed-event step multiplies the pairing work by roughly the pool depth. Check the run time on a small run first.
 - Errors are statistical only (from the fit covariance). They treat the LM template as exact and the pairs as independent, so they are somewhat too small (chi2/ndf of the fits is typically about 1.2 to 2.2). There are no systematic uncertainties yet.
 - The cosines in the fit are evaluated at the Delta-phi bin centres, which biases V2 low by about 1.6%.
 - The shoving strength g is set inside `gen_ALICE.cc` (`Ropewalk:gAmplitude`) and is written, with the PYTHIA version, to `generator_info.txt` in the data folder. Keep different g values in different folders anyway.
-- Histogram names must stay identical in `gen_ALICE.cc` and `post_ALICE.cc`; species names must also match in `plot_ALICE.cc`.
+- Histogram names must stay identical in `gen_ALICE.cc`, `Histogram_AMPT.cc` and `post.cc`; species names must also match in `plot.cc`.
 - Fits fail (printed as "fit failed") when a bin has too few pairs. This is expected in small test runs, especially for HM at high pT.
 - The HM class's V2Delta(FMD1,2-FMD3) reference point can come out consistent with zero (sign-ambiguous) even in a large run, since HM is a narrow top-0.07% selection. When that happens v2^2 for every species in that class is unreliable (dividing by a near-zero, sign-ambiguous denominator), even though the per-pairing V2Delta(TPC-FMD1,2)/V2Delta(TPC-FMD3) values for that class are still fine on their own. Check V2Delta(FMD1,2-FMD3)'s own significance before trusting a class's v2^2 column.
-- `NCQ_pT` and `NCQ_KET` previously looked identical when made by an earlier, standalone NCQ script, even though its KET = sqrt(pT^2+m^2) - m formula differs from plain pT. That script is now folded into `plot_ALICE.cc` (`drawNCQ`), with the KET formula unchanged — but `drawNCQ`'s call sites had an extra `outdir` argument that doesn't match its signature, so the file failed to compile at all until that was fixed (fixed; `drawNCQ(f, kind, cls, g)`, no `outdir`). Since `plot_ALICE` with the NCQ plots never successfully built before that fix, the two issues are unrelated: the identical-plots report is from the old standalone script, not this one. Still worth a pixel-by-pixel diff of the two new PNGs on the next successful build, since the root cause of the original report was never confirmed.
+- `NCQ_pT` and `NCQ_KET` previously looked identical when made by an earlier, standalone NCQ script, even though its KET = sqrt(pT^2+m^2) - m formula differs from plain pT. That script is now folded into `plot.cc` (`drawNCQ`), with the KET formula unchanged — but `drawNCQ`'s call sites had an extra `outdir` argument that doesn't match its signature, so the file failed to compile at all until that was fixed (fixed; `drawNCQ(f, kind, cls, g)`, no `outdir`). Since `plot` with the NCQ plots never successfully built before that fix, the two issues are unrelated: the identical-plots report is from the old standalone script, not this one. Still worth a pixel-by-pixel diff of the two new PNGs on the next successful build, since the root cause of the original report was never confirmed.
+
+### 7. Running on AMPT
+
+AMPT (string melting, pp at 13 TeV) goes through the same post-processing as PYTHIA. Generation runs on workstation4; conversion and fitting can run anywhere.
+
+1. **Generate** (workstation4, in `generator/AMPT/`, built fresh with the K0S weak-decay flag 0 in `input.ampt`; use `setsid nohup`, not a plain terminal):
+   ```
+   setsid nohup ./run_fast_ampt.sh 16 <events> ana/<name>.root 6250 > <name>.log 2>&1 < /dev/null &
+   ```
+   Output is one ROOT file with the tree `t` (per event: `ntrack`, `PID`, `charge`, `px`, `py`, `pz`, `energy`). Copy it to `data/data_AMPT/`. 1.5M events took about 75 minutes with 16 workers and gave a 2.4 GB file.
+2. **Convert** the tree to histograms with `data/data_AMPT/Histogram_AMPT.cc` (a separate copy of the pairing code of `gen_ALICE.cc`; same histogram names, binning, acceptance windows, class logic, Delta-eta/Delta-phi axes and mixed-event pool). The Makefile builds `data/data_AMPT/Histogram_AMPT`.
+   ```
+   ./Histogram_AMPT <tree.root> <out.root> [V0M_HM_MIN] [V0M_HM35_MIN] [NCH_HM_MIN] [NCH_LM_MAX] [input.ampt] [block_events]
+   ```
+   - Defaults for AMPT: HM is V0M > 142, HM35 is V0M > 72, nchCent > 25 for both, LM is nchCent < 20. (PYTHIA: 157 and 45.) These were found by scanning 1.5M events with the current `input.ampt`. Rescan if the AMPT settings change.
+   - The tree is processed in blocks of `block_events` events (default 1,000,000). Each block has its own histograms and its own mixed-event pool and is written to `<out>_part<k>.root`. A file that fits in one block keeps the plain name. Speed was about 14,500 events/s on one core.
+   - Events AMPT did not write (no particles) still count as "generated". If `input.ampt` is given, its content is logged in `generator_info.txt` next to the output.
+3. **Merge** the blocks (and, for several tree files, all their outputs) in `data/data_AMPT/`:
+   ```
+   hadd -f merged.root <out>_part*.root
+   ```
+4. **Fit and plot:** `./post/post AMPT` and `./post/plot AMPT`.
+
+Numbers from the 1.5M-event test (registered = V0A and V0C coincidence, 96.5% of events): HM (V0M > 142) has 1048 events with mean nchCent 45.3, HM35 (V0M > 72) has 74,746 events with mean nchCent 35.08, LM has 1,242,932 events. HM has too few events for stable fits at this size and needs about 100 times more.
+
+Differences from the PYTHIA setup to keep in mind when comparing:
+
+- PYTHIA generates non-diffractive events only. Whether the AMPT/HIJING sample includes diffractive events has not been checked.
+- AMPT does not decay pi0 (flag 0), so it has no pi0 Dalitz electrons, and the tree contains no muons. nchCent counts all stored charged particles in both generators. The effect on nchCent is probably small but has not been measured.
+- K0S and Lambda are not decayed in either generator. Sigma0 to Lambda feed-down is present in both.
+- The tuning is different (Monash with string shoving g = 10 for PYTHIA, AMPT's own settings in `input.ampt`). The AMPT settings have not yet been compared with the EPJ Plus pp settings.
+- The AMPT tree stores only charged particles and K0S, phi, Lambda, Xi and Omega. The analysis uses nothing else.
